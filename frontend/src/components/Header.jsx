@@ -3,7 +3,6 @@ import {
   Menu,
   BarChart3,
   ChevronDown,
-  ArrowLeft,
   User,
   CreditCard,
   LogOut,
@@ -12,12 +11,12 @@ import {
 import clsx from "clsx";
 
 const Header = ({
-  showBackButton = false,
-  onBack,
   onLogout,
   onAdminLogin,
   onHome,
   chatTitle,
+  onToggleSidebar,
+  isSidebarOpen = false,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const userDropdownRef = useRef(null);
@@ -62,6 +61,17 @@ const Header = ({
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 relative">
           <div className="flex items-center space-x-4">
+            {/* 사이드바 토글 버튼 - 사이드바가 닫혀있을 때만 표시 */}
+            {onToggleSidebar && !isSidebarOpen && (
+              <button 
+                className="p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors"
+                onClick={onToggleSidebar}
+                aria-label="사이드바 열기"
+              >
+                <Menu size={24} />
+              </button>
+            )}
+
             {/* 홈 버튼 */}
             {onHome && (
               <button
@@ -74,22 +84,6 @@ const Header = ({
                 </span>
               </button>
             )}
-
-            {/* 뒤로가기 버튼 */}
-            {showBackButton && (
-              <button
-                className="flex items-center space-x-2 p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors"
-                onClick={onBack}
-              >
-                <ArrowLeft size={20} />
-                <span className="hidden sm:inline">뒤로가기</span>
-              </button>
-            )}
-
-            {/* 모바일 메뉴 */}
-            <button className="md:hidden p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors">
-              <Menu size={24} />
-            </button>
           </div>
 
           {/* 채팅 제목 (가운데) */}

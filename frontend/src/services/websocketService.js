@@ -1,158 +1,235 @@
-/**
- * WebSocket 서비스 - 실시간 AI 채팅
- * AWS API Gateway WebSocket API와 연동
- */
-
-const WS_ENDPOINT = import.meta.env.VITE_WEBSOCKET_URL || 'wss://hsdpbajz23.execute-api.us-east-1.amazonaws.com/prod';
-
+// WebSocket 서비스
 class WebSocketService {
   constructor() {
     this.ws = null;
-    this.isConnected = false;
-    this.messageHandlers = [];
-    this.connectionHandlers = [];
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 3000; // 3초
-  }
-
-  // 연결 상태 확인
-  isWebSocketConnected() {
-    return this.ws && this.ws.readyState === WebSocket.OPEN;
+    this.reconnectDelay = 3000;
+    this.messageHandlers = new Set();
+    this.connectionHandlers = new Set();
+    this.isConnecting = false;
+    this.messageQueue = [];
+    this.isReconnecting = false;
+    this.conversationHistory = [];
+    this.currentConversationId = null;
   }
 
   // WebSocket 연결
-  connect() {
+  async connect() {
+    if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) {
+      console.log('이미 연결되어 있거나 연결 중입니다.');
+      return Promise.resolve();
+    }
+
+    this.isConnecting = true;
+
     return new Promise((resolve, reject) => {
       try {
-        console.log('🔌 WebSocket 연결 시도:', WS_ENDPOINT);
+        const wsUrl = 'wss://hsdpbajz23.execute-api.us-east-1.amazonaws.com/prod';
+        console.log('🔌 WebSocket 연결 시도:', wsUrl);
         
-        this.ws = new WebSocket(WS_ENDPOINT);
-        
-        this.ws.onopen = (event) => {
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
           console.log('✅ WebSocket 연결 성공');
-          this.isConnected = true;
+          this.isConnecting = false;
           this.reconnectAttempts = 0;
+          this.isReconnecting = false;
           
-          // 연결 핸들러들 호출
-          this.connectionHandlers.forEach(handler => {
-            try {
-              handler({ type: 'connected', event });
-            } catch (error) {
-              console.error('Connection handler error:', error);
-            }
-          });
+          // 연결 핸들러 호출
+          this.connectionHandlers.forEach(handler => handler(true));
+          
+          // 큐에 있는 메시지 전송
+          this.processMessageQueue();
           
           resolve();
         };
-        
+
         this.ws.onmessage = (event) => {
           try {
-            const message = JSON.parse(event.data);
+            const data = JSON.parse(event.data);
+            console.log('📨 WebSocket 메시지 수신:', data);
             
-            // 청크 메시지에 대한 상세 로깅
-            if (message.type === 'ai_chunk') {
-              console.log('📨 청크 수신:', {
-                type: message.type,
-                index: message.chunk_index,
-                chunk: message.chunk?.substring(0, 30) + '...',
-                length: message.chunk?.length
-              });
-            } else {
-              console.log('📨 WebSocket 메시지 수신:', {
-                type: message.type,
-                timestamp: message.timestamp,
-                ...(message.type === 'ai_start' && { startTime: new Date().toISOString() }),
-                ...(message.type === 'chat_end' && { totalChunks: message.total_chunks, responseLength: message.response_length })
-              });
-            }
-            
-            // 메시지 핸들러들 호출
+            // 모든 메시지 핸들러에 전달
             this.messageHandlers.forEach(handler => {
               try {
-                handler(message);
+                handler(data);
               } catch (error) {
-                console.error('Message handler error:', error);
+                console.error('메시지 핸들러 오류:', error);
               }
             });
-            
           } catch (error) {
             console.error('메시지 파싱 오류:', error, event.data);
           }
         };
-        
-        this.ws.onclose = (event) => {
-          console.log('🔌 WebSocket 연결 종료:', event.code, event.reason);
-          this.isConnected = false;
-          
-          // 연결 핸들러들 호출
-          this.connectionHandlers.forEach(handler => {
-            try {
-              handler({ type: 'disconnected', event });
-            } catch (error) {
-              console.error('Disconnection handler error:', error);
-            }
-          });
-          
-          // 자동 재연결 시도 (정상 종료가 아닌 경우)
-          if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            console.log(`🔄 재연결 시도 ${this.reconnectAttempts}/${this.maxReconnectAttempts} (${this.reconnectDelay/1000}초 후)`);
-            
-            setTimeout(() => {
-              this.connect().catch(console.error);
-            }, this.reconnectDelay);
-          }
-        };
-        
+
         this.ws.onerror = (error) => {
           console.error('❌ WebSocket 오류:', error);
-          this.isConnected = false;
-          reject(error);
+          this.isConnecting = false;
         };
-        
+
+        this.ws.onclose = (event) => {
+          console.log('🔌 WebSocket 연결 종료:', event.code, event.reason);
+          this.isConnecting = false;
+          
+          // 연결 핸들러 호출
+          this.connectionHandlers.forEach(handler => handler(false));
+          
+          // 자동 재연결 (정상 종료가 아닌 경우)
+          if (event.code !== 1000 && event.code !== 1001) {
+            this.handleReconnect();
+          }
+        };
+
+        // 30초 타임아웃
+        setTimeout(() => {
+          if (this.isConnecting) {
+            console.error('WebSocket 연결 타임아웃');
+            this.isConnecting = false;
+            this.ws?.close();
+            reject(new Error('Connection timeout'));
+          }
+        }, 30000);
+
       } catch (error) {
         console.error('WebSocket 연결 실패:', error);
+        this.isConnecting = false;
         reject(error);
       }
     });
   }
 
-  // WebSocket 연결 해제
-  disconnect() {
-    if (this.ws) {
-      console.log('🔌 WebSocket 연결 해제');
-      this.ws.close(1000, 'Normal closure');
-      this.ws = null;
-      this.isConnected = false;
+  // 재연결 처리
+  handleReconnect() {
+    if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
+      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        console.error('최대 재연결 시도 횟수 초과');
+      }
+      return;
     }
+
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+    
+    console.log(`🔄 재연결 시도 ${this.reconnectAttempts}/${this.maxReconnectAttempts} (${this.reconnectDelay / 1000}초 후)`);
+    
+    setTimeout(() => {
+      this.connect()
+        .then(() => {
+          console.log('✅ 재연결 성공');
+          this.isReconnecting = false;
+        })
+        .catch(() => {
+          console.error('재연결 실패');
+          this.isReconnecting = false;
+          this.handleReconnect();
+        });
+    }, this.reconnectDelay);
   }
 
-  // 메시지 전송
-  sendMessage(message, engineType = 'T5') {
+  // 메시지 청크 분할 함수
+  chunkMessage(message, maxSize = 100000) { // 100KB 단위로 분할
+    const chunks = [];
+    const messageBytes = new TextEncoder().encode(message);
+    
+    if (messageBytes.length <= maxSize) {
+      return [message];
+    }
+    
+    // UTF-8 안전하게 분할
+    let currentChunk = '';
+    let currentSize = 0;
+    const lines = message.split('\n');
+    
+    for (const line of lines) {
+      const lineBytes = new TextEncoder().encode(line + '\n');
+      if (currentSize + lineBytes.length > maxSize && currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = line + '\n';
+        currentSize = lineBytes.length;
+      } else {
+        currentChunk += line + '\n';
+        currentSize += lineBytes.length;
+      }
+    }
+    
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+    
+    return chunks;
+  }
+
+  // 메시지 전송 (청크 지원)
+  sendMessage(message, engineType = 'T5', conversationId = null) {
     return new Promise((resolve, reject) => {
       if (!this.isWebSocketConnected()) {
-        reject(new Error('WebSocket이 연결되지 않았습니다'));
+        console.error('WebSocket이 연결되지 않았습니다.');
+        this.messageQueue.push({ message, engineType, conversationId, resolve, reject });
+        this.connect();
         return;
       }
 
       try {
-        const payload = {
-          action: 'sendMessage',
-          message: message,
-          engineType: engineType,
-          timestamp: new Date().toISOString()
-        };
-        
-        console.log('📤 WebSocket 메시지 전송:', {
-          fullMessage: message,
-          messageLength: message.length,
-          engineType,
-          action: payload.action,
-          timestamp: payload.timestamp
+        // 대화 기록 처리
+        const processedHistory = this.conversationHistory.map(msg => {
+          const content = typeof msg.content === 'object' && msg.content.text 
+            ? msg.content.text 
+            : (typeof msg.content === 'string' ? msg.content : '');
+          
+          return {
+            role: msg.type === 'user' ? 'user' : 'assistant',
+            content: content,
+            timestamp: msg.timestamp
+          };
         });
+
+        // 메시지가 너무 큰 경우 청크로 분할
+        const messageChunks = this.chunkMessage(message);
         
-        this.ws.send(JSON.stringify(payload));
+        if (messageChunks.length > 1) {
+          console.log(`📦 대용량 메시지를 ${messageChunks.length}개 청크로 분할 전송`);
+          
+          // 청크 전송
+          messageChunks.forEach((chunk, index) => {
+            const payload = {
+              action: 'sendMessage',
+              message: chunk,
+              engineType: engineType,
+              conversationId: conversationId,
+              timestamp: new Date().toISOString(),
+              conversationHistory: index === 0 ? processedHistory : [], // 첫 청크에만 히스토리 포함
+              chunkInfo: {
+                total: messageChunks.length,
+                current: index + 1,
+                isFirst: index === 0,
+                isLast: index === messageChunks.length - 1
+              }
+            };
+            
+            console.log(`📤 청크 ${index + 1}/${messageChunks.length} 전송 (${chunk.length} 문자)`);
+            this.ws.send(JSON.stringify(payload));
+          });
+        } else {
+          // 일반 전송
+          const payload = {
+            action: 'sendMessage',
+            message: message,
+            engineType: engineType,
+            conversationId: conversationId,
+            timestamp: new Date().toISOString(),
+            conversationHistory: processedHistory
+          };
+          
+          console.log('📤 WebSocket 메시지 전송:', {
+            messageLength: message.length,
+            engineType,
+            conversationId: conversationId || 'new_conversation'
+          });
+          
+          this.ws.send(JSON.stringify(payload));
+        }
+        
         resolve();
         
       } catch (error) {
@@ -166,7 +243,7 @@ class WebSocketService {
   requestTitleSuggestions(conversation, engineType = 'T5') {
     return new Promise((resolve, reject) => {
       if (!this.isWebSocketConnected()) {
-        reject(new Error('WebSocket이 연결되지 않았습니다'));
+        reject(new Error('WebSocket not connected'));
         return;
       }
 
@@ -178,69 +255,94 @@ class WebSocketService {
           timestamp: new Date().toISOString()
         };
         
-        console.log('📤 제목 제안 요청:', {
-          conversationLength: conversation.length,
-          engineType,
-          action: payload.action,
-          timestamp: payload.timestamp
-        });
-        
+        console.log('📤 제목 생성 요청:', payload);
         this.ws.send(JSON.stringify(payload));
         resolve();
-        
       } catch (error) {
-        console.error('제목 제안 요청 실패:', error);
+        console.error('제목 요청 전송 실패:', error);
         reject(error);
       }
     });
   }
 
+  // 대화 기록 업데이트
+  updateConversationHistory(messages) {
+    this.conversationHistory = messages;
+    console.log('💬 대화 기록 업데이트:', messages.length, '개 메시지');
+  }
+
+  // 대화 ID 설정
+  setConversationId(id) {
+    this.currentConversationId = id;
+    console.log('🆔 대화 ID 설정:', id);
+  }
+
+  // 메시지 큐 처리
+  processMessageQueue() {
+    while (this.messageQueue.length > 0) {
+      const { message, engineType, conversationId, resolve, reject } = this.messageQueue.shift();
+      this.sendMessage(message, engineType, conversationId)
+        .then(resolve)
+        .catch(reject);
+    }
+  }
+
   // 메시지 핸들러 등록
-  onMessage(handler) {
-    this.messageHandlers.push(handler);
-    console.log(`🎯 메시지 핸들러 등록됨 (총 ${this.messageHandlers.length}개)`);
-    
-    // 핸들러 제거 함수 반환
-    return () => {
-      const index = this.messageHandlers.indexOf(handler);
-      if (index > -1) {
-        this.messageHandlers.splice(index, 1);
-        console.log(`🗑️ 메시지 핸들러 제거됨 (남은 개수: ${this.messageHandlers.length})`);
-      }
-    };
+  addMessageHandler(handler) {
+    this.messageHandlers.add(handler);
+  }
+
+  // 메시지 핸들러 제거
+  removeMessageHandler(handler) {
+    this.messageHandlers.delete(handler);
   }
 
   // 연결 상태 핸들러 등록
-  onConnection(handler) {
-    this.connectionHandlers.push(handler);
-    
-    // 핸들러 제거 함수 반환
-    return () => {
-      const index = this.connectionHandlers.indexOf(handler);
-      if (index > -1) {
-        this.connectionHandlers.splice(index, 1);
-      }
-    };
+  addConnectionHandler(handler) {
+    this.connectionHandlers.add(handler);
   }
 
-  // 연결 재시도
-  reconnect() {
-    this.disconnect();
-    this.reconnectAttempts = 0;
-    return this.connect();
+  // 연결 상태 핸들러 제거
+  removeConnectionHandler(handler) {
+    this.connectionHandlers.delete(handler);
+  }
+
+  // WebSocket 연결 상태 확인
+  isWebSocketConnected() {
+    return this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  // WebSocket 연결 종료
+  disconnect() {
+    if (this.ws) {
+      console.log('WebSocket 연결 종료 요청');
+      this.ws.close(1000, 'Normal closure');
+      this.ws = null;
+    }
+    this.messageHandlers.clear();
+    this.connectionHandlers.clear();
+    this.messageQueue = [];
+    this.conversationHistory = [];
+    this.currentConversationId = null;
   }
 }
 
 // 싱글톤 인스턴스
-const websocketService = new WebSocketService();
+const webSocketService = new WebSocketService();
 
-export default websocketService;
+// 내보낼 함수들
+export const connectWebSocket = () => webSocketService.connect();
+export const disconnectWebSocket = () => webSocketService.disconnect();
+export const sendChatMessage = (message, engineType, conversationId) => 
+  webSocketService.sendMessage(message, engineType, conversationId);
+export const isWebSocketConnected = () => webSocketService.isWebSocketConnected();
+export const addMessageHandler = (handler) => webSocketService.addMessageHandler(handler);
+export const removeMessageHandler = (handler) => webSocketService.removeMessageHandler(handler);
+export const addConnectionHandler = (handler) => webSocketService.addConnectionHandler(handler);
+export const removeConnectionHandler = (handler) => webSocketService.removeConnectionHandler(handler);
+export const requestTitleSuggestions = (conversation, engineType) => 
+  webSocketService.requestTitleSuggestions(conversation, engineType);
+export const updateConversationHistory = (messages) => webSocketService.updateConversationHistory(messages);
+export const setConversationId = (id) => webSocketService.setConversationId(id);
 
-// 편의 함수들
-export const connectWebSocket = () => websocketService.connect();
-export const disconnectWebSocket = () => websocketService.disconnect();
-export const sendChatMessage = (message, engineType) => websocketService.sendMessage(message, engineType);
-export const requestTitleSuggestions = (conversation, engineType) => websocketService.requestTitleSuggestions(conversation, engineType);
-export const onWebSocketMessage = (handler) => websocketService.onMessage(handler);
-export const onWebSocketConnection = (handler) => websocketService.onConnection(handler);
-export const isWebSocketConnected = () => websocketService.isWebSocketConnected();
+export default webSocketService;

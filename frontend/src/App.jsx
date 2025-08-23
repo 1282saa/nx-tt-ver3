@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { motion } from 'framer-motion';
 import MainContent from "./components/MainContent";
 import ChatPage from "./components/ChatPage";
 import LoginPage from "./components/LoginPage";
 import SignUpPage from "./components/SignUpPage";
 import LandingPage from "./components/LandingPage";
+import Sidebar from "./components/Sidebar";
 import { PageTransition } from "./components/PageTransition";
 import { AnimatePresence } from 'framer-motion';
 
@@ -31,6 +33,8 @@ function AppContent() {
     isStarred: false,
   });
   const [chatMessage, setChatMessage] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const sidebarRef = useRef(null);
 
   // 엔진 변경 시 프로젝트 제목 업데이트 및 localStorage 저장
   useEffect(() => {
@@ -127,6 +131,20 @@ function AppContent() {
     console.log("📝 앱 제목 업데이트됨:", newTitle);
   };
 
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
+
+  const handleNewConversation = () => {
+    // 사이드바의 대화 목록 새로고침
+    if (sidebarRef.current && sidebarRef.current.loadConversations) {
+      sidebarRef.current.loadConversations();
+    }
+  };
+
+  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입 제외)
+  const showSidebar = !['/', '/login', '/signup'].includes(location.pathname);
+
   return (
     <div
       className="flex w-full overflow-x-clip"
@@ -136,9 +154,29 @@ function AppContent() {
         color: "hsl(var(--text-100))",
       }}
     >
-      <div className="min-h-full w-full min-w-0 flex-1">
+      {/* Sidebar - show on all pages except landing, login, signup */}
+      {showSidebar && (
+        <Sidebar 
+          ref={sidebarRef}
+          selectedEngine={selectedEngine}
+          isOpen={isSidebarOpen}
+          onToggle={toggleSidebar}
+        />
+      )}
+      
+      <motion.div 
+        className="min-h-full w-full min-w-0 flex-1"
+        animate={{ 
+          marginLeft: showSidebar && isSidebarOpen ? 288 : 0 
+        }}
+        transition={{
+          type: "tween",
+          ease: "easeInOut",
+          duration: 0.2
+        }}
+      >
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
+          <Routes location={location} key={location.pathname.split('/').slice(0, 3).join('/')}>
             <Route 
               path="/" 
               element={
@@ -170,6 +208,42 @@ function AppContent() {
             } 
           />
             <Route 
+              path="/t5/chat/:conversationId?" 
+              element={
+                <PageTransition pageKey="chat-t5">
+                  <ChatPage
+                    initialMessage={location.state?.initialMessage || chatMessage}
+                    userRole={userRole}
+                    selectedEngine="T5"
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onTitleUpdate={handleTitleUpdate}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
+                    onNewConversation={handleNewConversation}
+                  />
+                </PageTransition>
+              } 
+            />
+            <Route 
+              path="/h8/chat/:conversationId?" 
+              element={
+                <PageTransition pageKey="chat-h8">
+                  <ChatPage
+                    initialMessage={location.state?.initialMessage || chatMessage}
+                    userRole={userRole}
+                    selectedEngine="H8"
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onTitleUpdate={handleTitleUpdate}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
+                    onNewConversation={handleNewConversation}
+                  />
+                </PageTransition>
+              } 
+            />
+            <Route 
               path="/t5" 
               element={
                 <PageTransition pageKey="main-t5">
@@ -181,6 +255,8 @@ function AppContent() {
                     onStartChat={handleStartChat}
                     onLogout={handleLogout}
                     onBackToLanding={handleBackToLanding}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
                   />
                 </PageTransition>
               } 
@@ -197,38 +273,8 @@ function AppContent() {
                     onStartChat={handleStartChat}
                     onLogout={handleLogout}
                     onBackToLanding={handleBackToLanding}
-                  />
-                </PageTransition>
-              } 
-            />
-            <Route 
-              path="/t5/chat" 
-              element={
-                <PageTransition pageKey="chat-t5">
-                  <ChatPage
-                    initialMessage={location.state?.initialMessage || chatMessage}
-                    userRole={userRole}
-                    selectedEngine="T5"
-                    onBack={handleBackToMain}
-                    onLogout={handleLogout}
-                    onBackToLanding={handleBackToLanding}
-                    onTitleUpdate={handleTitleUpdate}
-                  />
-                </PageTransition>
-              } 
-            />
-            <Route 
-              path="/h8/chat" 
-              element={
-                <PageTransition pageKey="chat-h8">
-                  <ChatPage
-                    initialMessage={location.state?.initialMessage || chatMessage}
-                    userRole={userRole}
-                    selectedEngine="H8"
-                    onBack={handleBackToMain}
-                    onLogout={handleLogout}
-                    onBackToLanding={handleBackToLanding}
-                    onTitleUpdate={handleTitleUpdate}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
                   />
                 </PageTransition>
               } 
@@ -237,7 +283,7 @@ function AppContent() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
-      </div>
+      </motion.div>
     </div>
   );
 }

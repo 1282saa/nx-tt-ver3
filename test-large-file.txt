@@ -1,0 +1,25 @@
+This is a test file for verifying large file upload functionality.
+The system should be able to handle files with hundreds of thousands of characters.
+Line 3
+Line 4
+Line 5
+Line 6
+Line 7
+Line 8
+Line 9
+Line 10
+This file is a small test, but the system is configured to handle:
+- Files up to 500MB in size
+- Text with hundreds of thousands of characters
+- Multiple file uploads simultaneously
+- Drag and drop anywhere on the webpage
+- WebSocket message chunking for large content
+- Automatic conversation saving to DynamoDB
+
+The backend is now properly configured with:
+- Lambda Function URL with CORS support
+- DynamoDB table for conversation storage
+- Proper IAM permissions
+- WebSocket chunking on the frontend
+
+All systems are operational and ready for large file processing.

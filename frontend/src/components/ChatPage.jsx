@@ -1,45 +1,57 @@
-import React, { useState, useRef, useEffect } from "react";
-import {
-  ArrowUp,
-  Plus,
-  Settings,
-  Search,
-  Copy,
-  ThumbsUp,
-  ThumbsDown,
-  RotateCcw,
-  Edit3,
-  Loader2,
-} from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { ArrowUp, Plus, Settings, Search } from "lucide-react";
 import Header from "./Header";
 import clsx from "clsx";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
-import remarkMath from "remark-math";
-import remarkEmoji from "remark-emoji";
-import rehypeKatex from "rehype-katex";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { generateTitles, generateTitlesMock } from "../services/api";
 import {
   connectWebSocket,
-  disconnectWebSocket,
   sendChatMessage,
-  onWebSocketMessage,
+  addMessageHandler,
+  removeMessageHandler,
   isWebSocketConnected,
 } from "../services/websocketService";
+import { autoSaveConversation, getConversation } from "../services/conversationService";
+import { useParams } from "react-router-dom";
+import LoadingSpinner from "./LoadingSpinner";
+import StreamingAssistantMessage from "./StreamingAssistantMessage";
+import AssistantMessage from "./AssistantMessage";
 
 const ChatPage = ({
   initialMessage,
   userRole,
   selectedEngine = "T5",
-  onBack,
   onLogout,
-  onBackToLanding
+  onBackToLanding,
+  onToggleSidebar,
+  isSidebarOpen = false,
+  onNewConversation
 }) => {
+  const { conversationId } = useParams();
+  const [currentConversationId, setCurrentConversationId] = useState(
+    conversationId || `${selectedEngine}_${Date.now()}`
+  );
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [messages, setMessages] = useState(() => {
     console.log("🎯 ChatPage 초기화 - initialMessage:", initialMessage);
+    
+    // localStorage에서 대화 히스토리 복원 시도
+    const conversationKey = `chat_history_${selectedEngine}`;
+    const savedMessages = localStorage.getItem(conversationKey);
+    
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        console.log("📦 localStorage에서 대화 복원:", parsedMessages.length, "개 메시지");
+        // timestamp를 Date 객체로 변환
+        return parsedMessages.map(msg => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+      } catch (error) {
+        console.error("대화 복원 실패:", error);
+      }
+    }
+    
     if (initialMessage) {
       const initialUserMessage = {
         id: 1,
@@ -52,6 +64,32 @@ const ChatPage = ({
     }
     return [];
   });
+  
+  // 기존 대화 불러오기
+  useEffect(() => {
+    if (conversationId) {
+      setIsLoadingConversation(true);
+      setCurrentConversationId(conversationId);
+      getConversation(conversationId).then(conversation => {
+        if (conversation && conversation.messages) {
+          console.log("📥 서버에서 대화 복원:", conversation.messages.length, "개 메시지");
+          setMessages(conversation.messages.map(msg => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          })));
+        }
+      }).catch(error => {
+        console.error("서버에서 대화 불러오기 실패:", error);
+      }).finally(() => {
+        setIsLoadingConversation(false);
+      });
+    } else {
+      // 새 대화인 경우
+      const newConversationId = `${selectedEngine}_${Date.now()}`;
+      setCurrentConversationId(newConversationId);
+      setMessages([]);
+    }
+  }, [conversationId, selectedEngine]);
   const [currentMessage, setCurrentMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -131,7 +169,8 @@ const ChatPage = ({
     chunkBuffer.current.clear();
 
     // WebSocket 메시지 핸들러 등록
-    const unsubscribe = onWebSocketMessage((message) => {
+    // WebSocket 메시지 핸들러
+    const handleWebSocketMessage = (message) => {
       // websocketService에서 이미 로깅하므로 중복 로깅 제거
 
       switch (message.type) {
@@ -212,7 +251,7 @@ const ChatPage = ({
                 currentTotal: streamingContent.length
               });
               
-              // 부드러운 타이핑을 위한 배치 처리
+              // 스트리밍 콘텐츠 업데이트
               setStreamingContent((prev) => {
                 const newContent = prev + chunkText;
                 console.log(`📊 스트리밍 진행:`, {
@@ -222,16 +261,14 @@ const ChatPage = ({
                   preview: newContent.substring(0, 50)
                 });
                 
-                // requestAnimationFrame으로 부드러운 업데이트 보장
-                requestAnimationFrame(() => {
-                  setMessages((prevMessages) =>
-                    prevMessages.map((msg) =>
-                      msg.id === currentAssistantMessageId.current
-                        ? { ...msg, content: newContent }
-                        : msg
-                    )
-                  );
-                });
+                // 메시지 업데이트
+                setMessages((prevMessages) =>
+                  prevMessages.map((msg) =>
+                    msg.id === currentAssistantMessageId.current
+                      ? { ...msg, content: newContent }
+                      : msg
+                  )
+                );
                 
                 return newContent;
               });
@@ -310,7 +347,10 @@ const ChatPage = ({
           chunkBuffer.current.clear();
           break;
       }
-    });
+    };
+
+    // WebSocket 메시지 핸들러 등록
+    addMessageHandler(handleWebSocketMessage);
 
     // WebSocket 연결 및 초기 메시지 처리
     const initWebSocket = async () => {
@@ -349,7 +389,8 @@ const ChatPage = ({
             });
             setIsLoading(true);
             try {
-              await sendChatMessage(initialMessage, selectedEngine);
+              // 초기 메시지는 대화 히스토리 없이 전송
+          await sendChatMessage(initialMessage, selectedEngine, [], currentConversationId);
               console.log("✅ 초기 메시지 전송 완료");
             } catch (error) {
               console.error("❌ Initial message 전송 실패:", error);
@@ -369,7 +410,9 @@ const ChatPage = ({
     // 컴포넌트 언마운트 시 정리
     return () => {
       console.log("ChatPage 언마운트 - 핸들러 및 상태 정리");
-      unsubscribe();
+      
+      // WebSocket 메시지 핸들러 제거
+      removeMessageHandler(handleWebSocketMessage);
 
       // 모든 타임아웃 클리어
       if (streamingTimeoutRef.current) {
@@ -472,6 +515,29 @@ const ChatPage = ({
       textareaRef.current.style.height = "auto";
     }
     
+    // 첫 메시지인 경우 즉시 저장하고 사이드바 업데이트
+    if (messages.length === 1 || (messages.length === 0 && initialMessage)) {
+      const conversationData = {
+        conversationId: currentConversationId,
+        engineType: selectedEngine,
+        messages: [userMessage],
+        title: userMessage.content.substring(0, 50)
+      };
+      
+      // 즉시 저장 (디바운스 없이)
+      import('../services/conversationService').then(({ saveConversation }) => {
+        saveConversation(conversationData).then(() => {
+          console.log('✅ 첫 메시지 저장 완료, 사이드바 업데이트');
+          // 사이드바 업데이트 콜백 호출
+          if (onNewConversation) {
+            onNewConversation();
+          }
+        }).catch(error => {
+          console.error('첫 메시지 저장 실패:', error);
+        });
+      });
+    }
+    
     // 렌더 완료 직후 1프레임에서 상단 정렬
     requestAnimationFrame(() => {
       scrollMessageToTop(id);
@@ -480,11 +546,30 @@ const ChatPage = ({
     try {
         // WebSocket으로 메시지 전송
         if (isConnected) {
+          // 대화 히스토리 생성 - 완료된 메시지만 포함
+          const conversationHistory = messages
+            .filter(msg => !msg.isStreaming && msg.content) // 스트리밍 중이 아니고 내용이 있는 메시지만
+            .map(msg => ({
+              type: msg.type,
+              content: msg.content,
+              timestamp: msg.timestamp
+            }));
+
+          console.log('🧠 대화 컨텍스트 생성:', {
+            totalMessages: messages.length,
+            historyLength: conversationHistory.length,
+            recentHistory: conversationHistory.slice(-4).map(msg => ({
+              role: msg.type,
+              preview: msg.content.substring(0, 50) + '...'
+            }))
+          });
+
           console.log(
             `📤 ${selectedEngine} 엔진으로 메시지 전송:`,
             userMessage.content
           );
-          await sendChatMessage(userMessage.content, selectedEngine);
+          
+          await sendChatMessage(userMessage.content, selectedEngine, conversationHistory, currentConversationId);
 
           // WebSocket 응답은 메시지 핸들러에서 처리됨
           // 스크롤은 메시지가 추가될 때 자동으로 처리
@@ -493,8 +578,17 @@ const ChatPage = ({
           console.warn("WebSocket이 연결되지 않았습니다. 재연결 시도 중...");
           await connectWebSocket();
           setIsConnected(true);
-          // 재연결 후 메시지 전송
-          await sendChatMessage(userMessage.content, selectedEngine);
+          
+          // 재연결 후 메시지 전송 (대화 히스토리 포함)
+          const conversationHistory = messages
+            .filter(msg => !msg.isStreaming && msg.content)
+            .map(msg => ({
+              type: msg.type,
+              content: msg.content,
+              timestamp: msg.timestamp
+            }));
+            
+          await sendChatMessage(userMessage.content, selectedEngine, conversationHistory, currentConversationId);
         }
       } catch (err) {
         console.error("메시지 전송 오류:", err);
@@ -531,8 +625,25 @@ const ChatPage = ({
     }
   };
 
-  // 메시지가 추가될 때마다 최근 사용자 메시지를 상단에 위치
+  // 메시지가 추가될 때마다 최근 사용자 메시지를 상단에 위치 & 자동 저장
   useEffect(() => {
+    // localStorage에 대화 저장 (최대 50개 메시지만 유지)
+    if (messages.length > 0) {
+      const conversationKey = `chat_history_${selectedEngine}`;
+      const messagesToSave = messages.slice(-50); // 최근 50개만 저장
+      localStorage.setItem(conversationKey, JSON.stringify(messagesToSave));
+      console.log("💾 localStorage에 대화 저장:", messagesToSave.length, "개 메시지");
+      
+      // 서버에 자동 저장 (DynamoDB)
+      const conversationData = {
+        conversationId: currentConversationId,
+        engineType: selectedEngine,
+        messages: messagesToSave,
+        title: messagesToSave[0]?.content?.substring(0, 50) || 'New Conversation'
+      };
+      autoSaveConversation(conversationData);
+    }
+    
     // 새 사용자 메시지가 추가되었을 때만 스크롤
     const lastMessage = messages[messages.length - 1];
     if (lastMessage && lastMessage.type === "user") {
@@ -541,15 +652,15 @@ const ChatPage = ({
         scrollMessageToTop(String(lastMessage.id));
       });
     }
-  }, [messages]);
+  }, [messages, selectedEngine, currentConversationId]);
 
   return (
     <div className="flex flex-col h-screen">
       <Header
-        showBackButton={true}
-        onBack={onBack}
         onLogout={onLogout}
         onHome={onBackToLanding}
+        onToggleSidebar={onToggleSidebar}
+        isSidebarOpen={isSidebarOpen}
       />
 
       {/* Main Chat Container */}
@@ -562,8 +673,15 @@ const ChatPage = ({
               userRole === "admin" ? "max-w-3xl" : "max-w-4xl"
             )}
           >
+            {/* Loading Spinner */}
+            {isLoadingConversation && (
+              <div className="flex justify-center items-center py-12">
+                <LoadingSpinner />
+              </div>
+            )}
+            
             {/* Messages */}
-            {messages.map((message) => (
+            {!isLoadingConversation && messages.map((message) => (
               <div 
                 key={message.id}
                 ref={registerItemRef(String(message.id))}
@@ -572,8 +690,19 @@ const ChatPage = ({
               >
                 {message.type === "user" ? (
                   <UserMessage message={message} />
+                ) : message.isStreaming ? (
+                  <StreamingAssistantMessage 
+                    content={message.content}
+                    isStreaming={message.isStreaming}
+                    timestamp={message.timestamp}
+                    messageId={message.id}
+                  />
                 ) : (
-                  <AssistantMessage message={message} />
+                  <AssistantMessage 
+                    content={message.content}
+                    timestamp={message.timestamp}
+                    messageId={message.id}
+                  />
                 )}
               </div>
             ))}
@@ -719,325 +848,5 @@ const UserMessage = ({ message }) => (
     </div>
   </div>
 );
-
-const AssistantMessage = ({ message }) => {
-  const [copiedIndex, setCopiedIndex] = React.useState(null);
-
-  const handleCopyTitle = (title, index) => {
-    navigator.clipboard.writeText(title);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
-
-  // Format message content for display
-  const formatContent = () => {
-    if (message.titles) {
-      return (
-        <>
-          <div className="whitespace-normal break-words">
-            안녕하세요! 기사 제목을 생성했습니다.
-          </div>
-          <div className="whitespace-normal break-words">
-            아래 {message.titles.length}개의 제목 중에서 가장 적합한 것을
-            선택하시거나, 수정하여 사용하실 수 있습니다:
-          </div>
-          <ol className="list-decimal space-y-2 pl-7">
-            {message.titles.map((title, index) => (
-              <li
-                key={index}
-                className="whitespace-normal break-words group/item relative"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="flex-1">{title}</span>
-                  <button
-                    onClick={() => handleCopyTitle(title, index)}
-                    className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 p-1 hover:bg-bg-300 rounded-md shrink-0 ml-2"
-                    title="복사"
-                  >
-                    {copiedIndex === index ? (
-                      <span className="text-xs text-accent-main-100">✓</span>
-                    ) : (
-                      <Copy size={14} className="text-text-400" />
-                    )}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ol>
-          <div className="whitespace-normal break-words">
-            추가로 다른 스타일의 제목이 필요하시거나, 특정 톤앤매너로 수정을
-            원하시면 말씀해 주세요.
-          </div>
-        </>
-      );
-    } else if (message.isError) {
-      return (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-red-800 whitespace-normal break-words">
-            {message.content}
-          </div>
-        </div>
-      );
-    } else {
-      // 마크다운 렌더링 적용
-      return (
-        <div className="chatbot-markdown prose prose-sm max-w-none">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkEmoji]}
-            rehypePlugins={[rehypeKatex]}
-            components={{
-              p: ({ children }) => (
-                <p className="mb-4 leading-relaxed">{children}</p>
-              ),
-              strong: ({ children }) => (
-                <strong className="font-bold text-text-100">{children}</strong>
-              ),
-              em: ({ children }) => <em className="italic">{children}</em>,
-              h1: ({ children }) => (
-                <h1 className="text-2xl font-bold mb-4 mt-6 pb-2 border-b border-border-200">
-                  {children}
-                </h1>
-              ),
-              h2: ({ children }) => (
-                <h2 className="text-xl font-bold mb-3 mt-5 pb-1 border-b border-border-300">
-                  {children}
-                </h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-lg font-bold mb-2 mt-4 text-accent-main-100">
-                  {children}
-                </h3>
-              ),
-              ul: ({ children }) => (
-                <ul className="list-disc pl-6 mb-4 space-y-2">{children}</ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="list-decimal pl-6 mb-4 space-y-2">{children}</ol>
-              ),
-              li: ({ children, ordered, index, ...props }) => {
-                // 체크리스트 지원
-                const text = children && children[0];
-                if (typeof text === "string") {
-                  const checkMatch = text.match(/^\[([x ])\] (.*)$/);
-                  if (checkMatch) {
-                    const checked = checkMatch[1] === "x";
-                    const content = checkMatch[2];
-                    return (
-                      <li
-                        className="flex items-start gap-2 list-none -ml-6"
-                        {...props}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          readOnly
-                          className="mt-1 cursor-not-allowed"
-                        />
-                        <span
-                          className={checked ? "line-through opacity-70" : ""}
-                        >
-                          {content}
-                        </span>
-                      </li>
-                    );
-                  }
-                }
-                return (
-                  <li className="leading-relaxed" {...props}>
-                    {children}
-                  </li>
-                );
-              },
-              code: ({ inline, className, children, ...props }) => {
-                const match = /language-(\w+)/.exec(className || "");
-                const codeString = String(children).replace(/\n$/, "");
-
-                if (!inline && match) {
-                  return (
-                    <div className="relative group mb-4">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(codeString);
-                          const btn = event.target;
-                          btn.textContent = "✓ 복사됨";
-                          setTimeout(() => (btn.textContent = "복사"), 2000);
-                        }}
-                        className="absolute right-2 top-2 px-2 py-1 text-xs bg-bg-300 hover:bg-bg-400 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        복사
-                      </button>
-                      <SyntaxHighlighter
-                        language={match[1]}
-                        style={vscDarkPlus}
-                        customStyle={{
-                          margin: 0,
-                          borderRadius: "0.5rem",
-                          fontSize: "0.875rem",
-                        }}
-                        {...props}
-                      >
-                        {codeString}
-                      </SyntaxHighlighter>
-                    </div>
-                  );
-                }
-
-                return inline ? (
-                  <code
-                    className="px-1.5 py-0.5 bg-bg-300 text-accent-main-100 rounded text-sm"
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                ) : (
-                  <code
-                    className="block p-4 bg-bg-200 rounded-lg overflow-x-auto text-sm"
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                );
-              },
-              pre: ({ children }) => <div className="mb-4">{children}</div>,
-              blockquote: ({ children }) => {
-                // 알림 박스 지원 (> [!NOTE], > [!TIP], > [!WARNING], > [!IMPORTANT])
-                const text =
-                  children &&
-                  children[0] &&
-                  children[0].props &&
-                  children[0].props.children;
-                if (typeof text === "string") {
-                  const alertMatch = text.match(
-                    /^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]/
-                  );
-                  if (alertMatch) {
-                    const type = alertMatch[1].toLowerCase();
-                    const content = text.replace(
-                      /^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]\s*/,
-                      ""
-                    );
-                    const styles = {
-                      note: "bg-blue-900/20 border-blue-500 text-blue-200",
-                      tip: "bg-green-900/20 border-green-500 text-green-200",
-                      warning:
-                        "bg-yellow-900/20 border-yellow-500 text-yellow-200",
-                      important:
-                        "bg-purple-900/20 border-purple-500 text-purple-200",
-                      caution: "bg-red-900/20 border-red-500 text-red-200",
-                    };
-                    const icons = {
-                      note: "📝",
-                      tip: "💡",
-                      warning: "⚠️",
-                      important: "❗",
-                      caution: "🚨",
-                    };
-                    return (
-                      <div
-                        className={`border-l-4 p-4 my-4 rounded-r ${styles[type]}`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <span className="text-xl">{icons[type]}</span>
-                          <div>
-                            <div className="font-bold mb-1 uppercase">
-                              {type}
-                            </div>
-                            <div>{content}</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                }
-                return (
-                  <blockquote className="border-l-4 border-border-300 pl-4 italic my-4">
-                    {children}
-                  </blockquote>
-                );
-              },
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  className="text-accent-main-000 underline hover:text-accent-main-200"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {children}
-                </a>
-              ),
-              hr: () => <hr className="my-6 border-border-300" />,
-              table: ({ children }) => (
-                <div className="chatbot-table-wrapper my-4">
-                  <table className="w-full">{children}</table>
-                </div>
-              ),
-              thead: ({ children }) => (
-                <thead className="bg-bg-200">{children}</thead>
-              ),
-              th: ({ children }) => (
-                <th className="px-4 py-3 text-left font-semibold border-b-2 border-border-300">
-                  {children}
-                </th>
-              ),
-              td: ({ children }) => (
-                <td className="px-4 py-3 border-b border-border-400">
-                  {children}
-                </td>
-              ),
-              tbody: ({ children }) => <tbody>{children}</tbody>,
-              tr: ({ children }) => (
-                <tr className="hover:bg-bg-100 transition-colors">
-                  {children}
-                </tr>
-              ),
-            }}
-          >
-            {message.content}
-          </ReactMarkdown>
-        </div>
-      );
-    }
-  };
-
-  return (
-    <>
-      <div data-test-render-count="1" className="mb-1 mt-1">
-        <div 
-          style={{ 
-            height: "auto", 
-            opacity: 1, 
-            transform: "none",
-            transition: "opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
-          }}
-        >
-          <div className="group relative pb-3">
-            <div
-              className="relative pl-2.5 pr-2"
-              style={{
-                fontFamily: "var(--font-claude-response)",
-                fontSize: "0.9375rem",
-                lineHeight: "1.65rem",
-                letterSpacing: "-0.015em",
-                color: "hsl(var(--text-100))",
-                wordBreak: "break-words",
-              }}
-            >
-              <div>
-                <div 
-                  className="grid-cols-1 grid gap-2.5"
-                  style={{
-                    animation: message.isStreaming ? "subtle-pulse 2s ease-in-out infinite" : "none"
-                  }}
-                >
-                  {formatContent()}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-};
 
 export default ChatPage;
