@@ -98,6 +98,8 @@ html {
   font-variation-settings: normal;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01";
   font-feature-settings: "ss01";
   line-height: inherit;
   scroll-behavior: smooth;
@@ -443,9 +445,13 @@ body {
 
   .font-claude-response {
     font-family: var(--font-claude-response);
-    font-size: 1.25rem;
-    line-height: 1.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.65rem;
+    letter-spacing: -0.015em;
     font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01";
   }
 
   /* 입력 필드 스타일 */
@@ -581,4 +587,178 @@ body {
   .copy-button:hover {
     background-color: hsl(var(--bg-300));
   }
+}
+
+/* ========================================
+   챗봇 답변 출력 스타일
+   ======================================== */
+
+/* 마크다운 스타일링 향상 */
+.chatbot-markdown {
+  max-width: none;
+  color: hsl(var(--text-100));
+}
+
+.chatbot-markdown h1 {
+  font-size: 1.875rem !important;
+  margin-bottom: 1.5rem !important;
+  margin-top: 2rem !important;
+  padding-bottom: 0.75rem !important;
+  border-bottom: 2px solid hsl(var(--border-200)) !important;
+  color: hsl(var(--text-100)) !important;
+  font-weight: 700 !important;
+}
+
+.chatbot-markdown h2 {
+  font-size: 1.5rem !important;
+  margin-bottom: 1.25rem !important;
+  margin-top: 1.75rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid hsl(var(--border-200)) !important;
+  color: hsl(var(--text-100)) !important;
+  font-weight: 700 !important;
+}
+
+.chatbot-markdown h3 {
+  font-size: 1.25rem !important;
+  margin-bottom: 1rem !important;
+  margin-top: 1.5rem !important;
+  color: hsl(var(--accent-main-100)) !important;
+  font-weight: 700 !important;
+}
+
+.chatbot-markdown p {
+  margin-bottom: 1.5rem !important;
+  line-height: 1.8 !important;
+}
+
+.chatbot-markdown ul {
+  margin-bottom: 2rem !important;
+  padding-left: 1.5rem !important;
+  list-style-type: disc !important;
+}
+
+.chatbot-markdown ol {
+  margin-bottom: 2rem !important;
+  padding-left: 1.5rem !important;
+  list-style-type: decimal !important;
+}
+
+.chatbot-markdown li {
+  margin-bottom: 0.75rem !important;
+  line-height: 1.8 !important;
+}
+
+.chatbot-markdown strong {
+  font-weight: 700 !important;
+  color: hsl(var(--text-100)) !important;
+}
+
+.chatbot-markdown code {
+  font-size: 0.875rem !important;
+  background-color: hsl(var(--bg-300)) !important;
+  padding: 0.125rem 0.5rem !important;
+  border-radius: 0.25rem !important;
+  color: hsl(var(--accent-main-100)) !important;
+  font-family: var(--font-mono) !important;
+}
+
+.chatbot-markdown pre {
+  background-color: hsl(var(--bg-200)) !important;
+  padding: 1.5rem !important;
+  border-radius: 0.5rem !important;
+  overflow-x: auto !important;
+  font-size: 0.875rem !important;
+  border: 1px solid hsl(var(--border-200)) !important;
+  margin-bottom: 1.5rem !important;
+}
+
+.chatbot-markdown pre code {
+  background-color: transparent !important;
+  padding: 0 !important;
+}
+
+.chatbot-markdown blockquote {
+  border-left: 4px solid hsl(var(--border-300)) !important;
+  padding-left: 1.5rem !important;
+  font-style: italic !important;
+  margin: 1.5rem 0 !important;
+  color: hsl(var(--text-300)) !important;
+}
+
+.chatbot-markdown a {
+  color: hsl(var(--accent-main-000)) !important;
+  text-decoration: underline !important;
+  font-weight: 500 !important;
+  transition: color 0.2s !important;
+}
+
+.chatbot-markdown a:hover {
+  color: hsl(var(--accent-main-200)) !important;
+}
+
+.chatbot-markdown hr {
+  margin: 2rem 0 !important;
+  border: none !important;
+  border-top: 1px solid hsl(var(--border-300)) !important;
+}
+
+/* 테이블 스타일 */
+.chatbot-table-wrapper {
+  position: relative;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+.chatbot-table-wrapper table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px hsla(var(--border-300)/0.2), 0 4px 12px hsla(var(--always-black)/0.05);
+}
+
+.chatbot-table-wrapper thead {
+  background: linear-gradient(to bottom, hsl(var(--bg-200)), hsl(var(--bg-300)));
+}
+
+.chatbot-table-wrapper th {
+  border-bottom: 2px solid hsl(var(--border-300));
+  border-right: 1px solid hsl(var(--border-400));
+  padding: 14px 18px;
+  font-weight: 600;
+  text-align: left;
+  color: hsl(var(--text-100));
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.chatbot-table-wrapper th:last-child {
+  border-right: none;
+}
+
+.chatbot-table-wrapper tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.chatbot-table-wrapper tbody tr:hover {
+  background-color: hsl(var(--bg-100));
+}
+
+.chatbot-table-wrapper td {
+  border-bottom: 1px solid hsl(var(--border-400));
+  border-right: 1px solid hsla(var(--border-400)/0.3);
+  padding: 14px 18px;
+  color: hsl(var(--text-100));
+  font-size: 14px;
+}
+
+.chatbot-table-wrapper td:last-child {
+  border-right: none;
+}
+
+.chatbot-table-wrapper tbody tr:last-child td {
+  border-bottom: none;
 }

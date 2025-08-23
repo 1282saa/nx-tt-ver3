@@ -1,23 +1,64 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Plus, Search, Upload, FileText, Paperclip, Type } from "lucide-react";
+import { Plus, Search, Upload, FileText, Paperclip, Type, ChevronDown } from "lucide-react";
 import clsx from "clsx";
+import * as promptService from '../services/promptService';
 
-const PromptManagePanel = () => {
+const PromptManagePanel = ({ engineType = 'T5' }) => {
+  const [instructions, setInstructions] = useState('');
   const [files, setFiles] = useState([]);
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
-  const [instructions, setInstructions] = useState("");
   const [showFileDropdown, setShowFileDropdown] = useState(false);
   const [showTextModal, setShowTextModal] = useState(false);
   const [textContent, setTextContent] = useState("");
   const [textTitle, setTextTitle] = useState("");
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const fileDropdownRef = useRef(null);
 
-  const handleFileUpload = (event) => {
+  // 엔진 타입 변경 시 데이터 로드
+  useEffect(() => {
+    loadPromptData();
+  }, [engineType]);
+
+  const loadPromptData = async () => {
+    setLoading(true);
+    try {
+      const data = await promptService.getPrompt(engineType);
+      if (data.prompt) {
+        setInstructions(data.prompt.instruction || '');
+      }
+      if (data.files) {
+        setFiles(data.files);
+      }
+    } catch (error) {
+      console.error('Failed to load prompt data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (event) => {
     const uploadedFiles = Array.from(event.target.files);
-    setFiles((prev) => [...prev, ...uploadedFiles]);
     setShowFileDropdown(false);
+    
+    for (const file of uploadedFiles) {
+      try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const content = e.target.result;
+          const newFile = await promptService.addFile(engineType, {
+            fileName: file.name,
+            fileContent: content
+          });
+          setFiles(prev => [...prev, newFile]);
+        };
+        reader.readAsText(file);
+      } catch (error) {
+        console.error('Failed to upload file:', error);
+      }
+    }
   };
 
   const handleFileDropdownClick = () => {
@@ -32,6 +73,27 @@ const PromptManagePanel = () => {
   const handleTextAdd = () => {
     setShowTextModal(true);
     setShowFileDropdown(false);
+  };
+
+  const handleDeleteFile = async (fileId) => {
+    try {
+      await promptService.deleteFile(engineType, fileId);
+      setFiles(prev => prev.filter(f => f.fileId !== fileId));
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+    }
+  };
+
+  const handleSaveInstructions = async () => {
+    setSaving(true);
+    try {
+      await promptService.updatePrompt(engineType, { instruction: instructions });
+      setShowInstructionsModal(false);
+    } catch (error) {
+      console.error('Failed to save instructions:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // 외부 클릭 시 파일 드롭다운 닫기
@@ -69,19 +131,8 @@ const PromptManagePanel = () => {
                     type="button"
                     onClick={() => setShowInstructionsModal(true)}
                   >
-                    <div
-                      className="flex items-center justify-center"
-                      style={{ width: "16px", height: "16px" }}
-                    >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="shrink-0"
-                        aria-hidden="true"
-                      >
+                    <div className="flex items-center justify-center" style={{ width: "16px", height: "16px" }}>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M10 3C10.2761 3 10.5 3.22386 10.5 3.5V9.5H16.5L16.6006 9.50977C16.8286 9.55629 17 9.75829 17 10C17 10.2417 16.8286 10.4437 16.6006 10.4902L16.5 10.5H10.5V16.5C10.5 16.7761 10.2761 17 10 17C9.72386 17 9.5 16.7761 9.5 16.5V10.5H3.5C3.22386 10.5 3 10.2761 3 10C3 9.72386 3.22386 9.5 3.5 9.5H9.5V3.5C9.5 3.22386 9.72386 3 10 3Z"></path>
                       </svg>
                     </div>
@@ -90,7 +141,7 @@ const PromptManagePanel = () => {
               </div>
               <p className="text-text-500 font-small line-clamp-2">
                 <span className="opacity-60">
-                  Claude의 응답을 맞춤화하는 지침 추가
+                  {loading ? '로딩 중...' : (instructions || `Claude의 응답을 맞춤화하는 지침 추가`)}
                 </span>
               </p>
             </div>
@@ -183,7 +234,11 @@ const PromptManagePanel = () => {
             </div>
 
             {/* File Upload Area */}
-            {files.length === 0 ? (
+            {loading ? (
+              <div className="text-center h-[10rem] bg-bg-200 rounded-2xl flex items-center justify-center">
+                <span className="text-text-500">로딩 중...</span>
+              </div>
+            ) : files.length === 0 ? (
               <div className="text-center h-[10rem] bg-bg-200 rounded-2xl flex flex-col gap-3 items-center justify-center text-text-500 font-small">
                 <img
                   alt=""
@@ -212,13 +267,11 @@ const PromptManagePanel = () => {
               </div>
             ) : (
               <ul className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 mt-2">
-                {files.map((file, index) => (
+                {files.map((file) => (
                   <FileCard
-                    key={index}
+                    key={file.fileId}
                     file={file}
-                    onRemove={() => {
-                      setFiles((prev) => prev.filter((_, i) => i !== index));
-                    }}
+                    onRemove={() => handleDeleteFile(file.fileId)}
                     onClick={() => {
                       setSelectedFile(file);
                       setShowFilePreview(true);
@@ -253,14 +306,9 @@ const PromptManagePanel = () => {
           >
             <div className="min-h-full">
               <div className="flex flex-col gap-1">
-                <h2 className="font-xl-bold">프로젝트 지침 설정</h2>
+                <h2 className="font-xl-bold">{engineType} 엔진 지침 설정</h2>
                 <p className="text-text-300 text-sm">
-                  아키텍쳐 내 대화에 대한 관련 지침과 정보를 Claude에
-                  제공하세요.&nbsp;이는{" "}
-                  <a className="hover:underline" href="/settings/profile">
-                    사용자 설정
-                  </a>{" "}
-                  및 대화에서 선택한 스타일과 함께 작동합니다.
+                  {engineType} 엔진이 제목을 생성할 때 사용할 지침을 입력하세요.
                 </p>
               </div>
 
@@ -277,7 +325,7 @@ const PromptManagePanel = () => {
                       rows="16"
                       value={instructions}
                       onChange={(e) => setInstructions(e.target.value)}
-                      placeholder="큰 작업을 세분화하고 필요한 경우 명확히 하기 위한 질문을 하세요."
+                      placeholder={`${engineType} 엔진의 제목 생성 지침을 입력하세요.`}
                     />
                   </div>
                 </div>
@@ -294,13 +342,10 @@ const PromptManagePanel = () => {
                 <button
                   className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none bg-text-000 text-bg-000 font-base-bold relative overflow-hidden transition-transform will-change-transform ease-[cubic-bezier(0.165,0.85,0.45,1)] duration-150 hover:scale-y-[1.015] hover:scale-x-[1.005] backface-hidden after:absolute after:inset-0 after:bg-[radial-gradient(at_bottom,hsla(var(--bg-000)/20%),hsla(var(--bg-000)/0%))] after:opacity-0 after:transition after:duration-200 after:translate-y-2 hover:after:opacity-100 hover:after:translate-y-0 h-9 px-4 py-2 rounded-lg min-w-[5rem] active:scale-[0.985] whitespace-nowrap"
                   type="button"
-                  onClick={() => {
-                    console.log("지침 저장:", instructions);
-                    setShowInstructionsModal(false);
-                  }}
-                  disabled={!instructions.trim()}
+                  onClick={handleSaveInstructions}
+                  disabled={!instructions.trim() || saving}
                 >
-                  지침 저장
+                  {saving ? '저장 중...' : '지침 저장'}
                 </button>
               </div>
             </div>
@@ -332,24 +377,27 @@ const PromptManagePanel = () => {
           >
             <div className="min-h-full">
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  console.log("텍스트 콘텐츠 추가:", {
-                    title: textTitle,
-                    content: textContent,
-                  });
-                  // 텍스트를 파일로 추가하는 로직
-                  const textFile = new File(
-                    [textContent],
-                    `${textTitle || "제목없음"}.txt`,
-                    { type: "text/plain" }
-                  );
-                  // 미리보기를 위해 content 속성 추가
-                  textFile.content = textContent;
-                  setFiles((prev) => [...prev, textFile]);
-                  setShowTextModal(false);
-                  setTextTitle("");
-                  setTextContent("");
+                  console.log('Submitting text file:', { textTitle, textContent, engineType });
+                  try {
+                    const newFile = await promptService.addFile(engineType, {
+                      fileName: `${textTitle || "제목없음"}.txt`,
+                      fileContent: textContent
+                    });
+                    console.log('File added successfully:', newFile);
+                    setFiles((prev) => {
+                      const updated = [...prev, newFile];
+                      console.log('Updated files:', updated);
+                      return updated;
+                    });
+                    setShowTextModal(false);
+                    setTextTitle("");
+                    setTextContent("");
+                  } catch (error) {
+                    console.error('Failed to add text file:', error);
+                    alert('파일 추가 실패: ' + error.message);
+                  }
                 }}
               >
                 <h2 className="font-claude-response mb-3 text-xl">
@@ -495,7 +543,7 @@ const PromptManagePanel = () => {
               <div className="flex items-center gap-4 justify-between">
                 <h2 className="font-xl-bold text-text-100 flex w-full min-w-0 items-center leading-6 break-words">
                   <span className="[overflow-wrap:anywhere]">
-                    {selectedFile.name.replace(".txt", "")}
+                    {(selectedFile.fileName || selectedFile.name || '').replace(".txt", "")}
                   </span>
                 </h2>
                 <div className="flex items-center gap-2">
@@ -528,10 +576,10 @@ const PromptManagePanel = () => {
                 <span className="text-text-500 mb-3 mt-0.5 flex flex-wrap gap-y-2 items-start items-center text-xs">
                   <span>
                     <span>
-                      {(selectedFile.size / 1024).toFixed(2)} KB&nbsp;
+                      {((selectedFile.size || (selectedFile.fileContent || '').length) / 1024).toFixed(2)} KB&nbsp;
                       <span className="opacity-50 mx-1">•</span>
-                      {selectedFile.type === "text/plain"
-                        ? `${(selectedFile.content || "").split("\n").length}줄`
+                      {(selectedFile.fileName || selectedFile.name || '').endsWith('.txt')
+                        ? `${(selectedFile.fileContent || selectedFile.content || "").split("\n").length}줄`
                         : "파일"}
                     </span>
                   </span>
@@ -547,8 +595,8 @@ const PromptManagePanel = () => {
                   borderColor: "hsl(var(--border-300)/0.15)",
                 }}
               >
-                {selectedFile.type === "text/plain"
-                  ? selectedFile.content || "텍스트 내용을 불러올 수 없습니다."
+                {(selectedFile.fileName || selectedFile.name || '').endsWith('.txt')
+                  ? selectedFile.fileContent || selectedFile.content || "텍스트 내용을 불러올 수 없습니다."
                   : "이 파일 형식은 미리보기를 지원하지 않습니다."}
               </div>
             </div>
@@ -601,10 +649,12 @@ const FileCard = ({ file, onRemove, onClick }) => {
     return 1;
   };
 
-  const isTextFile =
-    file.type === "text/plain" || getFileExtension(file.name) === "txt";
-  const fileContent = isTextFile ? file.name.replace(".txt", "") : file.name;
-  const lines = isTextFile ? getFileLines(file.content || "") : 1;
+  const fileName = file.fileName || file.name || 'untitled';
+  const fileContent = file.fileContent || file.content || '';
+  const isTextFile = fileName.endsWith('.txt');
+  const displayName = isTextFile ? fileName.replace(".txt", "") : fileName;
+  const lines = isTextFile ? getFileLines(fileContent) : 1;
+  const fileSize = file.size || (fileContent ? fileContent.length : 0);
 
   return (
     <div>
@@ -637,7 +687,7 @@ const FileCard = ({ file, onRemove, onClick }) => {
                 className="text-[12px] tracking-tighter break-words text-text-100 line-clamp-3"
                 style={{ opacity: 1 }}
               >
-                {fileContent}
+                {displayName}
               </h3>
               <p
                 className="text-[10px] line-clamp-1 tracking-tighter break-words text-text-500"
@@ -645,7 +695,7 @@ const FileCard = ({ file, onRemove, onClick }) => {
               >
                 {isTextFile
                   ? `${lines}줄`
-                  : `${Math.round(file.size / 1024)}KB`}
+                  : `${Math.round(fileSize / 1024)}KB`}
               </p>
             </div>
             <div>
@@ -663,7 +713,7 @@ const FileCard = ({ file, onRemove, onClick }) => {
                     }}
                   >
                     <p className="uppercase truncate font-ui text-text-300 text-[11px] leading-[13px]">
-                      {getFileExtension(file.name)}
+                      {getFileExtension(fileName)}
                     </p>
                   </div>
                 </div>

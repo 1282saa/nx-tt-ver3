@@ -1,8 +1,11 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Zap, Sparkles } from "lucide-react";
 import Header from "./Header";
 
 const LandingPage = ({ onSelectEngine, onLogin }) => {
+  const navigate = useNavigate();
+  
   const handleEngineSelect = (engine) => {
     onSelectEngine(engine);
   };

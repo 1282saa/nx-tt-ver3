@@ -4,14 +4,13 @@ import {
   MoreHorizontal,
   Star,
   Edit3,
-  Archive,
-  Trash2,
 } from "lucide-react";
 import clsx from "clsx";
 import ChatInput from "./ChatInput";
 import PromptManagePanel from "./PromptManagePanel";
 import T5NH8GuideSection from "./T5NH8GuideSection";
 import Header from "./Header";
+import * as promptService from '../services/promptService';
 
 const MainContent = ({
   project,
@@ -25,8 +24,26 @@ const MainContent = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTitle, setEditTitle] = useState(project.title);
-  const [editDescription, setEditDescription] = useState(project.description);
+  const [editDescription, setEditDescription] = useState("");
+  const [currentDescription, setCurrentDescription] = useState("");
+  const [saving, setSaving] = useState(false);
   const dropdownRef = useRef(null);
+
+  // 초기 데이터 로드 (description 가져오기)
+  useEffect(() => {
+    const loadDescription = async () => {
+      try {
+        const data = await promptService.getPrompt(selectedEngine);
+        if (data.prompt) {
+          setCurrentDescription(data.prompt.description || '');
+          setEditDescription(data.prompt.description || '');
+        }
+      } catch (error) {
+        console.error('Failed to load description:', error);
+      }
+    };
+    loadDescription();
+  }, [selectedEngine]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -70,15 +87,28 @@ const MainContent = ({
   const handleCancelEdit = () => {
     setShowEditModal(false);
     setEditTitle(project.title);
-    setEditDescription(project.description);
+    setEditDescription(currentDescription);
   };
 
-  const handleSaveEdit = () => {
-    console.log("Saving edits:", {
-      title: editTitle,
-      description: editDescription,
-    });
-    setShowEditModal(false);
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      // DB에 description 저장
+      await promptService.updatePrompt(selectedEngine, { 
+        description: editDescription 
+      });
+      
+      setCurrentDescription(editDescription);
+      setShowEditModal(false);
+      
+      // PromptManagePanel 리프레시를 위해 잠시 후 reload
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to save description:', error);
+      alert('설명 저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -153,18 +183,10 @@ const MainContent = ({
                       >
                         <button
                           onClick={() => handleMenuAction("edit")}
-                          className="relative flex w-full min-w-0 select-none items-center rounded-lg border border-transparent px-3 py-2 text-sm text-text-100 transition-colors hover:border-border-100 hover:bg-bg-100 active:bg-bg-200 active:border-border-100 active:text-text-100"
+                          className="relative flex w-full min-w-0 select-none items-center rounded-lg border border-transparent px-3 py-2 text-xs text-text-100 transition-colors hover:border-border-100 hover:bg-bg-100 active:bg-bg-200 active:border-border-100 active:text-text-100"
                         >
-                          <Edit3 className="mr-2 h-4 w-4" />
+                          <Edit3 className="mr-2 h-3.5 w-3.5" />
                           <span>세부사항 수정</span>
-                        </button>
-                        <button className="relative flex w-full min-w-0 select-none items-center rounded-lg border border-transparent px-3 py-2 text-sm text-text-100 transition-colors hover:border-border-100 hover:bg-bg-100 active:bg-bg-200 active:border-border-100 active:text-text-100">
-                          <Archive className="mr-2 h-4 w-4" />
-                          <span>보관함으로 이동</span>
-                        </button>
-                        <button className="relative flex w-full min-w-0 select-none items-center rounded-lg border border-transparent px-3 py-2 text-sm text-text-100 transition-colors hover:border-border-100 hover:bg-bg-100 active:bg-bg-200 active:border-border-100 active:text-text-100">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          <span>프로젝트 삭제</span>
                         </button>
                       </div>
                     )}
@@ -235,7 +257,7 @@ const MainContent = ({
         </div>
 
         {/* Prompt Manage Panel - 관리자만 보임 */}
-        {userRole === "admin" && <PromptManagePanel />}
+        {userRole === "admin" && <PromptManagePanel engineType={selectedEngine} />}
       </main>
 
       {/* Edit Project Modal */}
@@ -261,17 +283,6 @@ const MainContent = ({
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-text-200 mb-2">
-                  제목
-                </label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-border-300 rounded-md bg-bg-100 text-text-100 focus:outline-none focus:ring-2 focus:ring-accent-main-000"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-200 mb-2">
                   설명
                 </label>
                 <textarea
@@ -291,9 +302,10 @@ const MainContent = ({
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-accent-main-000 text-white rounded-md hover:bg-accent-main-100 transition-colors"
+                className="px-4 py-2 bg-accent-main-000 text-white rounded-md hover:bg-accent-main-100 transition-colors disabled:opacity-50"
+                disabled={saving || !editDescription.trim()}
               >
-                저장
+                {saving ? '저장 중...' : '저장'}
               </button>
             </div>
           </div>

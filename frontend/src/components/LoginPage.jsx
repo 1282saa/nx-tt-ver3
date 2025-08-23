@@ -1,11 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import clsx from "clsx";
 
-const LoginPage = ({ onLogin, onGoToSignUp }) => {
+const LoginPage = ({ onLogin, onGoToSignUp, selectedEngine: propEngine }) => {
+  const location = useLocation();
   const [email, setEmail] = useState("ai@sedaily.com");
   const [password, setPassword] = useState("Sedaily2024!");
   const [isLoading, setIsLoading] = useState(false);
   const [accountType, setAccountType] = useState("user"); // 'admin' | 'user'
+  const [selectedEngine, setSelectedEngine] = useState(propEngine || "T5");
+
+  useEffect(() => {
+    // navigation state나 prop에서 엔진 정보 가져오기
+    if (location.state?.engine) {
+      setSelectedEngine(location.state.engine);
+    } else if (propEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [location, propEngine]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

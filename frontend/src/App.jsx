@@ -1,20 +1,53 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import MainContent from "./components/MainContent";
 import ChatPage from "./components/ChatPage";
 import LoginPage from "./components/LoginPage";
 import SignUpPage from "./components/SignUpPage";
 import LandingPage from "./components/LandingPage";
 
-function App() {
-  const [currentPage, setCurrentPage] = useState("landing"); // 'landing' | 'main' | 'chat' | 'login' | 'signup'
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState("user"); // 'admin' | 'user'
-  const [selectedEngine, setSelectedEngine] = useState("T5"); // 'T5' | 'H8'
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // localStorage에서 상태 복원
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem('isLoggedIn') === 'true';
+  });
+  const [userRole, setUserRole] = useState(() => {
+    return localStorage.getItem('userRole') || "user";
+  });
+  const [selectedEngine, setSelectedEngine] = useState(() => {
+    // 현재 경로에서 엔진 타입 추출
+    if (location.pathname.includes('/t5')) return "T5";
+    if (location.pathname.includes('/h8')) return "H8";
+    // localStorage에서 복원
+    return localStorage.getItem('selectedEngine') || "T5";
+  });
   const [currentProject, setCurrentProject] = useState({
     title: "아키텍쳐",
     isStarred: false,
   });
   const [chatMessage, setChatMessage] = useState("");
+
+  // 엔진 변경 시 프로젝트 제목 업데이트 및 localStorage 저장
+  useEffect(() => {
+    setCurrentProject(prev => ({
+      ...prev,
+      title: `${selectedEngine} 빠른 제목 생성`
+    }));
+    localStorage.setItem('selectedEngine', selectedEngine);
+  }, [selectedEngine]);
+
+  // 로그인 상태 변경 시 localStorage 저장
+  useEffect(() => {
+    localStorage.setItem('isLoggedIn', isLoggedIn);
+  }, [isLoggedIn]);
+
+  // 사용자 역할 변경 시 localStorage 저장
+  useEffect(() => {
+    localStorage.setItem('userRole', userRole);
+  }, [userRole]);
 
   const toggleStar = () => {
     setCurrentProject((prev) => ({
@@ -25,23 +58,33 @@ function App() {
 
   const handleStartChat = (message) => {
     setChatMessage(message);
-    setCurrentPage("chat");
+    const enginePath = selectedEngine.toLowerCase();
+    navigate(`/${enginePath}/chat`);
   };
 
   const handleBackToMain = () => {
-    setCurrentPage("main");
+    const enginePath = selectedEngine.toLowerCase();
+    navigate(`/${enginePath}`);
     setChatMessage("");
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
-    setCurrentPage("landing");
+    setUserRole("user");
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('selectedEngine');
+    navigate("/");
   };
 
   const handleLogin = (role = "user") => {
     setIsLoggedIn(true);
     setUserRole(role);
-    setCurrentPage("main");
+    // location.state에서 엔진 정보 가져오기
+    const engine = location.state?.engine || selectedEngine;
+    setSelectedEngine(engine);
+    const enginePath = engine.toLowerCase();
+    navigate(`/${enginePath}`);
   };
 
   const handleSelectEngine = (engine) => {
@@ -50,24 +93,25 @@ function App() {
       ...prev,
       title: `${engine} 빠른 제목 생성`,
     }));
-    setCurrentPage("login");
+    navigate("/login", { state: { engine } });
   };
 
   const handleSignUp = () => {
     setIsLoggedIn(true);
-    setCurrentPage("main");
+    const enginePath = selectedEngine.toLowerCase();
+    navigate(`/${enginePath}`);
   };
 
   const handleGoToSignUp = () => {
-    setCurrentPage("signup");
+    navigate("/signup");
   };
 
   const handleBackToLogin = () => {
-    setCurrentPage("login");
+    navigate("/login");
   };
 
   const handleBackToLanding = () => {
-    setCurrentPage("landing");
+    navigate("/");
   };
 
   return (
@@ -80,39 +124,102 @@ function App() {
       }}
     >
       <div className="min-h-full w-full min-w-0 flex-1">
-        {currentPage === "landing" ? (
-          <LandingPage
-            onSelectEngine={handleSelectEngine}
-            onLogin={handleLogin}
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              <LandingPage
+                onSelectEngine={handleSelectEngine}
+                onLogin={handleLogin}
+              />
+            } 
           />
-        ) : currentPage === "login" ? (
-          <LoginPage onLogin={handleLogin} onGoToSignUp={handleGoToSignUp} />
-        ) : currentPage === "signup" ? (
-          <SignUpPage
-            onSignUp={handleSignUp}
-            onBackToLogin={handleBackToLogin}
+          <Route 
+            path="/login" 
+            element={
+              <LoginPage 
+                onLogin={handleLogin} 
+                onGoToSignUp={handleGoToSignUp}
+                selectedEngine={location.state?.engine || selectedEngine}
+              />
+            } 
           />
-        ) : currentPage === "main" ? (
-          <MainContent
-            project={currentProject}
-            userRole={userRole}
-            selectedEngine={selectedEngine}
-            onToggleStar={toggleStar}
-            onStartChat={handleStartChat}
-            onLogout={handleLogout}
-            onBackToLanding={handleBackToLanding}
+          <Route 
+            path="/signup" 
+            element={
+              <SignUpPage
+                onSignUp={handleSignUp}
+                onBackToLogin={handleBackToLogin}
+              />
+            } 
           />
-        ) : (
-          <ChatPage
-            initialMessage={chatMessage}
-            userRole={userRole}
-            onBack={handleBackToMain}
-            onLogout={handleLogout}
-            onBackToLanding={handleBackToLanding}
+          <Route 
+            path="/t5" 
+            element={
+              <MainContent
+                project={currentProject}
+                userRole={userRole}
+                selectedEngine="T5"
+                onToggleStar={toggleStar}
+                onStartChat={handleStartChat}
+                onLogout={handleLogout}
+                onBackToLanding={handleBackToLanding}
+              />
+            } 
           />
-        )}
+          <Route 
+            path="/h8" 
+            element={
+              <MainContent
+                project={currentProject}
+                userRole={userRole}
+                selectedEngine="H8"
+                onToggleStar={toggleStar}
+                onStartChat={handleStartChat}
+                onLogout={handleLogout}
+                onBackToLanding={handleBackToLanding}
+              />
+            } 
+          />
+          <Route 
+            path="/t5/chat" 
+            element={
+              <ChatPage
+                initialMessage={chatMessage}
+                userRole={userRole}
+                selectedEngine="T5"
+                onBack={handleBackToMain}
+                onLogout={handleLogout}
+                onBackToLanding={handleBackToLanding}
+              />
+            } 
+          />
+          <Route 
+            path="/h8/chat" 
+            element={
+              <ChatPage
+                initialMessage={chatMessage}
+                userRole={userRole}
+                selectedEngine="H8"
+                onBack={handleBackToMain}
+                onLogout={handleLogout}
+                onBackToLanding={handleBackToLanding}
+              />
+            } 
+          />
+          {/* 기본 리다이렉트 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 
