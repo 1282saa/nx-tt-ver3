@@ -1,8 +1,23 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Menu, BarChart3, ChevronDown, ArrowLeft } from "lucide-react";
+import {
+  Menu,
+  BarChart3,
+  ChevronDown,
+  ArrowLeft,
+  User,
+  CreditCard,
+  LogOut,
+  Home,
+} from "lucide-react";
 import clsx from "clsx";
 
-const Header = ({ showBackButton = false, onBack, onLogout }) => {
+const Header = ({
+  showBackButton = false,
+  onBack,
+  onLogout,
+  onAdminLogin,
+  onHome,
+}) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const userDropdownRef = useRef(null);
 
@@ -29,6 +44,8 @@ const Header = ({ showBackButton = false, onBack, onLogout }) => {
 
     if (action === "logout" && onLogout) {
       onLogout();
+    } else if (action === "dashboard" && onAdminLogin) {
+      onAdminLogin();
     }
     // 여기에 각 액션별 로직 추가
   };
@@ -43,7 +60,21 @@ const Header = ({ showBackButton = false, onBack, onLogout }) => {
     >
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 relative">
-          <div className="flex items-center space-x-8">
+          <div className="flex items-center space-x-4">
+            {/* 홈 버튼 */}
+            {onHome && (
+              <button
+                className="flex items-center space-x-2 p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors"
+                onClick={onHome}
+              >
+                <Home size={20} />
+                <span className="hidden sm:inline text-sm font-medium">
+                  TITLE-HUB
+                </span>
+              </button>
+            )}
+
+            {/* 뒤로가기 버튼 */}
             {showBackButton && (
               <button
                 className="flex items-center space-x-2 p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors"
@@ -53,6 +84,8 @@ const Header = ({ showBackButton = false, onBack, onLogout }) => {
                 <span className="hidden sm:inline">뒤로가기</span>
               </button>
             )}
+
+            {/* 모바일 메뉴 */}
             <button className="md:hidden p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors">
               <Menu size={24} />
             </button>
@@ -94,29 +127,69 @@ const Header = ({ showBackButton = false, onBack, onLogout }) => {
               {/* User Dropdown */}
               {showUserDropdown && (
                 <div
-                  className="absolute right-0 top-full mt-2 z-50 min-w-[12rem] overflow-hidden p-1.5 text-text-300 rounded-xl border-0.5"
+                  className="absolute right-0 mt-2 w-64 rounded-lg py-2 z-50"
                   style={{
                     backgroundColor: "hsl(var(--bg-000))",
-                    borderColor: "hsl(var(--border-300)/0.15)",
-                    backdropFilter: "blur(12px)",
-                    boxShadow: "0 0 0 1px hsl(var(--always-black)/4%)",
+                    border: "1px solid hsl(var(--bg-300))",
+                    boxShadow:
+                      "0 0.25rem 1.25rem hsl(var(--always-black)/15%), 0 0 0 0.5px hsla(var(--bg-300)/0.5)",
                   }}
-                  role="menu"
                 >
                   <div
-                    role="menuitem"
-                    className="font-base py-1.5 px-2 rounded-lg cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis grid grid-cols-[minmax(0,_1fr)_auto] gap-2 items-center outline-none select-none hover:bg-bg-200 hover:text-text-000 text-left"
-                    onClick={() => handleUserMenuClick("profile")}
+                    className="px-4 py-3 border-b"
+                    style={{ borderColor: "hsl(var(--bg-300))" }}
                   >
-                    <span>프로필 설정</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-accent-main-000 rounded-full flex items-center justify-center text-white font-medium">
+                        T
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-100 truncate">
+                          ttrhtt12
+                        </p>
+                        <p className="text-xs text-text-300 truncate">
+                          ttrhtt12@naver.com
+                        </p>
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-1"
+                          style={{
+                            backgroundColor: "hsl(var(--accent-main-000)/0.1)",
+                            color: "hsl(var(--accent-main-000))",
+                          }}
+                        >
+                          사용자
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150"
+                      onClick={() => handleUserMenuClick("profile")}
+                    >
+                      <User className="h-4 w-4 mr-3" />
+                      프로필
+                    </button>
+                    <button
+                      className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150"
+                      onClick={() => handleUserMenuClick("subscription")}
+                    >
+                      <CreditCard className="h-4 w-4 mr-3" />
+                      구독 플랜
+                    </button>
                   </div>
                   <div
-                    role="menuitem"
-                    className="font-base py-1.5 px-2 rounded-lg cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis grid grid-cols-[minmax(0,_1fr)_auto] gap-2 items-center outline-none select-none hover:bg-bg-200 hover:text-text-000 text-left"
+                    className="border-t my-1"
+                    style={{ borderColor: "hsl(var(--bg-300))" }}
+                  ></div>
+                  <button
                     onClick={() => handleUserMenuClick("logout")}
+                    className="flex items-center px-4 py-2 text-sm w-full text-left transition-colors duration-150"
+                    style={{ color: "hsl(var(--danger-000))" }}
                   >
-                    <span>로그아웃</span>
-                  </div>
+                    <LogOut className="h-4 w-4 mr-3" />
+                    로그아웃
+                  </button>
                 </div>
               )}
             </div>

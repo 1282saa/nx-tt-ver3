@@ -9,16 +9,18 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import ChatInput from "./ChatInput";
-import RightPanel from "./RightPanel";
-import T5GuideSection from "./T5GuideSection";
+import PromptManagePanel from "./PromptManagePanel";
+import T5NH8GuideSection from "./T5NH8GuideSection";
 import Header from "./Header";
 
 const MainContent = ({
   project,
   userRole,
+  selectedEngine = "T5",
   onToggleStar,
   onStartChat,
   onLogout,
+  onBackToLanding,
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -72,7 +74,7 @@ const MainContent = ({
 
   return (
     <>
-      <Header onLogout={onLogout} />
+      <Header onLogout={onLogout} onHome={onBackToLanding} />
 
       {/* Main Grid */}
       <main
@@ -215,13 +217,15 @@ const MainContent = ({
               </div>
             </div>
 
-            {/* T5 Guide Section - 사용자만 표시 */}
-            {userRole === "user" && <T5GuideSection />}
+            {/* T5/H8 Guide Section - 사용자만 표시 */}
+            {userRole === "user" && (
+              <T5NH8GuideSection selectedEngine={selectedEngine} />
+            )}
           </div>
         </div>
 
-        {/* Right Panel - 관리자만 보임 */}
-        {userRole === "admin" && <RightPanel />}
+        {/* Prompt Manage Panel - 관리자만 보임 */}
+        {userRole === "admin" && <PromptManagePanel />}
       </main>
 
       {/* Edit Project Modal */}

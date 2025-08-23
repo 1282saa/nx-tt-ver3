@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Plus, Search, Upload, FileText, Paperclip, Type } from "lucide-react";
 import clsx from "clsx";
 
-const RightPanel = () => {
+const PromptManagePanel = () => {
   const [files, setFiles] = useState([]);
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [instructions, setInstructions] = useState("");
@@ -712,4 +712,4 @@ const FileCard = ({ file, onRemove, onClick }) => {
   );
 };
 
-export default RightPanel;
+export default PromptManagePanel;

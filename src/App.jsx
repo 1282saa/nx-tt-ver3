@@ -3,11 +3,13 @@ import MainContent from "./components/MainContent";
 import ChatPage from "./components/ChatPage";
 import LoginPage from "./components/LoginPage";
 import SignUpPage from "./components/SignUpPage";
+import LandingPage from "./components/LandingPage";
 
 function App() {
-  const [currentPage, setCurrentPage] = useState("main"); // 'main' | 'chat' | 'login' | 'signup'
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [userRole, setUserRole] = useState("admin"); // 'admin' | 'user'
+  const [currentPage, setCurrentPage] = useState("landing"); // 'landing' | 'main' | 'chat' | 'login' | 'signup'
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState("user"); // 'admin' | 'user'
+  const [selectedEngine, setSelectedEngine] = useState("T5"); // 'T5' | 'H8'
   const [currentProject, setCurrentProject] = useState({
     title: "아키텍쳐",
     isStarred: false,
@@ -33,13 +35,22 @@ function App() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
-    setCurrentPage("login");
+    setCurrentPage("landing");
   };
 
   const handleLogin = (role = "user") => {
     setIsLoggedIn(true);
     setUserRole(role);
     setCurrentPage("main");
+  };
+
+  const handleSelectEngine = (engine) => {
+    setSelectedEngine(engine);
+    setCurrentProject((prev) => ({
+      ...prev,
+      title: `${engine} 빠른 제목 생성`,
+    }));
+    setCurrentPage("login");
   };
 
   const handleSignUp = () => {
@@ -55,6 +66,10 @@ function App() {
     setCurrentPage("login");
   };
 
+  const handleBackToLanding = () => {
+    setCurrentPage("landing");
+  };
+
   return (
     <div
       className="flex w-full overflow-x-clip"
@@ -65,7 +80,12 @@ function App() {
       }}
     >
       <div className="min-h-full w-full min-w-0 flex-1">
-        {currentPage === "login" ? (
+        {currentPage === "landing" ? (
+          <LandingPage
+            onSelectEngine={handleSelectEngine}
+            onLogin={handleLogin}
+          />
+        ) : currentPage === "login" ? (
           <LoginPage onLogin={handleLogin} onGoToSignUp={handleGoToSignUp} />
         ) : currentPage === "signup" ? (
           <SignUpPage
@@ -76,9 +96,11 @@ function App() {
           <MainContent
             project={currentProject}
             userRole={userRole}
+            selectedEngine={selectedEngine}
             onToggleStar={toggleStar}
             onStartChat={handleStartChat}
             onLogout={handleLogout}
+            onBackToLanding={handleBackToLanding}
           />
         ) : (
           <ChatPage
@@ -86,6 +108,7 @@ function App() {
             userRole={userRole}
             onBack={handleBackToMain}
             onLogout={handleLogout}
+            onBackToLanding={handleBackToLanding}
           />
         )}
       </div>

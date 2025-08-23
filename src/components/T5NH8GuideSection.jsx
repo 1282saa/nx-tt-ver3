@@ -1,15 +1,16 @@
 import React from "react";
 
-const T5GuideSection = () => {
+const T5NH8GuideSection = ({ selectedEngine = "T5" }) => {
   return (
     <div className="w-full max-w-4xl pt-6">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-text-100 mb-2">
-          T5 빠른 제목 생성
+          {selectedEngine} 빠른 제목 생성
         </h2>
         <p className="text-sm text-text-300">
-          5가지 스타일의 제목을 빠르게 생성합니다. 일반적인 기사에 적합한 신속한
-          솔루션입니다.
+          {selectedEngine === "T5"
+            ? "5가지 스타일의 제목을 빠르게 생성합니다. 일반적인 기사에 적합한 신속한 솔루션입니다."
+            : "8가지 스타일의 정교한 제목을 생성합니다. 완벽한 품질의 결과물을 제공합니다."}
         </p>
       </div>
 
@@ -64,8 +65,10 @@ const T5GuideSection = () => {
           </div>
           <div>
             <p className="text-sm text-text-200">
-              <span className="font-medium">엔진 특성:</span> 빠른 처리 속도,
-              5가지 제목 스타일
+              <span className="font-medium">엔진 특성:</span>
+              {selectedEngine === "T5"
+                ? "빠른 처리 속도, 5가지 제목 스타일"
+                : "정교한 분석, 8가지 제목 스타일"}
             </p>
           </div>
         </div>
@@ -74,4 +77,4 @@ const T5GuideSection = () => {
   );
 };
 
-export default T5GuideSection;
+export default T5NH8GuideSection;

@@ -14,7 +14,13 @@ import {
 import Header from "./Header";
 import clsx from "clsx";
 
-const ChatPage = ({ initialMessage, userRole, onBack, onLogout }) => {
+const ChatPage = ({
+  initialMessage,
+  userRole,
+  onBack,
+  onLogout,
+  onBackToLanding,
+}) => {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -94,7 +100,12 @@ Could you clarify what you'd like help with? If you have actual documents you'd 
 
   return (
     <div>
-      <Header showBackButton={true} onBack={onBack} onLogout={onLogout} />
+      <Header
+        showBackButton={true}
+        onBack={onBack}
+        onLogout={onLogout}
+        onHome={onBackToLanding}
+      />
 
       <div className="relative h-full flex-1 flex overflow-x-hidden overflow-y-scroll pt-6">
         <div
