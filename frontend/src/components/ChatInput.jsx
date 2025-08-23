@@ -1,20 +1,44 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plus, Settings, Search, ArrowUp, ChevronDown } from "lucide-react";
 import clsx from "clsx";
+import { generateTitles, generateTitlesMock } from "../services/api";
 
-const ChatInput = ({ onSendMessage, onStartChat }) => {
+const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated }) => {
   const [message, setMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const textareaRef = useRef(null);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (message.trim()) {
+    if (message.trim() && !isLoading) {
+      const messageText = message.trim();
+      
+      // 먼저 메시지를 전송
       if (onStartChat) {
-        onStartChat(message.trim());
-      } else {
-        onSendMessage(message.trim());
+        onStartChat(messageText);
+      } else if (onSendMessage) {
+        onSendMessage(messageText);
       }
+      
+      // API 호출해서 제목 생성
+      if (onTitlesGenerated) {
+        setIsLoading(true);
+        try {
+          const useMock = import.meta.env.VITE_USE_MOCK === "true";
+          const generateFn = useMock ? generateTitlesMock : generateTitles;
+          const result = await generateFn(messageText);
+          
+          if (result.success && result.data) {
+            onTitlesGenerated(result.data);
+          }
+        } catch (error) {
+          console.error("제목 생성 실패:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+      
       setMessage("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -151,16 +175,22 @@ const ChatInput = ({ onSendMessage, onStartChat }) => {
               <button
                 className={clsx(
                   "inline-flex items-center justify-center relative shrink-0 select-none transition-colors h-8 w-8 rounded-md active:scale-95 !rounded-lg !h-8 !w-8",
-                  isTyping
+                  isLoading
+                    ? "bg-accent-main-100 text-white cursor-wait"
+                    : isTyping
                     ? "bg-accent-main-000 text-white hover:bg-accent-main-200"
                     : "bg-gray-600 text-gray-400 cursor-not-allowed"
                 )}
-                disabled={!isTyping}
+                disabled={!isTyping || isLoading}
                 type="button"
                 onClick={handleSubmit}
                 aria-label="메시지 보내기"
               >
-                <ArrowUp size={16} />
+                {isLoading ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <ArrowUp size={16} />
+                )}
               </button>
             </div>
           </div>

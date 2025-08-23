@@ -58,6 +58,15 @@ const MainContent = ({
     onStartChat(message);
   };
 
+  const handleTitlesGenerated = (data) => {
+    console.log("Titles generated:", data);
+    // 제목이 생성되면 ChatPage로 이동 (App.jsx의 onStartChat를 통해)
+    if (data.titles && data.titles.length > 0) {
+      // 첫 번째 제목을 메시지로 전달하거나, 원본 메시지를 유지
+      // onStartChat는 이미 호출되었으므로 여기서는 추가 동작 불필요
+    }
+  };
+
   const handleCancelEdit = () => {
     setShowEditModal(false);
     setEditTitle(project.title);
@@ -213,6 +222,7 @@ const MainContent = ({
                 <ChatInput
                   onSendMessage={handleSendMessage}
                   onStartChat={onStartChat}
+                  onTitlesGenerated={handleTitlesGenerated}
                 />
               </div>
             </div>

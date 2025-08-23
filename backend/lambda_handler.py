@@ -1,12 +1,13 @@
 import json
 import boto3
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
+import re
 
-# Bedrock 클라이언트 초기화
+# Bedrock 클라이언트 초기화 - 명시적으로 us-east-1 사용
 bedrock_runtime = boto3.client(
     service_name='bedrock-runtime',
-    region_name=os.environ.get('AWS_REGION', 'us-east-1')
+    region_name='us-east-1'  # 명시적으로 us-east-1 지정
 )
 
 def generate_titles(article_content: str) -> Dict[str, Any]:
@@ -20,23 +21,25 @@ def generate_titles(article_content: str) -> Dict[str, Any]:
         생성된 제목들과 메타데이터
     """
     
-    prompt = f"""다음 뉴스 기사를 읽고 다양한 스타일의 제목을 10개 생성해주세요.
-    각 제목은 한 줄로 작성하고, 기사의 핵심 내용을 잘 담아야 합니다.
-    
-    [기사 내용]
-    {article_content}
-    
-    [제목 생성]
-    1.
-    2.
-    3.
-    4.
-    5.
-    6.
-    7.
-    8.
-    9.
-    10."""
+    # 더 명확한 프롬프트로 개선
+    prompt = f"""다음 뉴스 기사를 읽고 다양한 스타일의 제목을 정확히 10개 생성해주세요.
+각 제목은 반드시 숫자와 점으로 시작하고(예: 1. ), 한 줄로 작성해주세요.
+기사의 핵심 내용을 잘 담아야 합니다.
+
+[기사 내용]
+{article_content}
+
+[제목 생성]
+1. 첫 번째 제목을 여기에 작성
+2. 두 번째 제목을 여기에 작성
+3. 세 번째 제목을 여기에 작성
+4. 네 번째 제목을 여기에 작성
+5. 다섯 번째 제목을 여기에 작성
+6. 여섯 번째 제목을 여기에 작성
+7. 일곱 번째 제목을 여기에 작성
+8. 여덟 번째 제목을 여기에 작성
+9. 아홉 번째 제목을 여기에 작성
+10. 열 번째 제목을 여기에 작성"""
     
     # Bedrock Claude Sonnet 4 호출
     try:
@@ -45,8 +48,8 @@ def generate_titles(article_content: str) -> Dict[str, Any]:
         
         request_body = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,  # 최대값 설정
-            "temperature": 0.2,
+            "max_tokens": 2000,
+            "temperature": 0.7,
             "messages": [
                 {
                     "role": "user",
@@ -54,6 +57,9 @@ def generate_titles(article_content: str) -> Dict[str, Any]:
                 }
             ]
         }
+        
+        print(f"Calling Bedrock with model: {model_id}")
+        print(f"Region: us-east-1")
         
         response = bedrock_runtime.invoke_model(
             modelId=model_id,
@@ -65,27 +71,52 @@ def generate_titles(article_content: str) -> Dict[str, Any]:
         response_body = json.loads(response['body'].read())
         generated_text = response_body.get('content', [{}])[0].get('text', '')
         
-        # 생성된 텍스트를 줄 단위로 분리하고 번호 제거
+        print(f"Generated text: {generated_text[:500]}...")  # 디버깅용
+        
+        # 개선된 파싱 로직
         titles = []
-        for line in generated_text.split('\n'):
+        lines = generated_text.split('\n')
+        
+        for line in lines:
             line = line.strip()
-            if line and line[0].isdigit():
-                # 번호와 점 제거 (예: "1. " -> "")
-                title = line.split('.', 1)[1].strip() if '.' in line else line[2:].strip()
+            if not line:
+                continue
+                
+            # 숫자로 시작하는 라인 찾기 (1. 또는 1) 형식)
+            match = re.match(r'^(\d+)[\.\)]\s*(.+)', line)
+            if match:
+                title = match.group(2).strip()
                 if title:
                     titles.append(title)
+            # 번호 없이 제목만 있는 경우도 처리
+            elif len(titles) < 10 and line and not line.startswith('['):
+                # [제목 생성] 같은 헤더는 제외
+                titles.append(line)
+        
+        # 제목이 없으면 전체 텍스트에서 다시 파싱 시도
+        if not titles:
+            print("No titles found with first parsing, trying alternative...")
+            # 대체 파싱: 줄바꿈으로 구분된 텍스트 추출
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('[') and len(line) > 10:
+                    titles.append(line)
+                    if len(titles) >= 10:
+                        break
         
         result = {
-            "titles": titles,
-            "count": len(titles),
+            "titles": titles[:10],  # 최대 10개만
+            "count": len(titles[:10]),
             "model": model_id,
-            "raw_response": generated_text
+            "raw_response": generated_text[:1000]  # 디버깅용 일부만
         }
         
+        print(f"Parsed {len(titles)} titles")
         return result
         
     except Exception as e:
         print(f"Error calling Bedrock: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
         raise e
 
 
