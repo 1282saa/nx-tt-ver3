@@ -380,56 +380,54 @@ const AssistantMessage = ({ message }) => {
             style={{ opacity: 1, transform: "none" }}
           >
             <div className="relative px-2 md:px-8">
-              {/* If message has titles array, display as cards */}
+              {/* If message has titles array, display as styled list */}
               {message.titles ? (
-                <div className="space-y-3">
-                  <div className="text-sm text-text-300 mb-4">
-                    생성된 {message.titles.length}개의 제목:
-                  </div>
-                  <div className="grid gap-2">
+                <div className="grid-cols-1 grid gap-2.5 [&_>_*]:min-w-0">
+                  <p className="whitespace-normal break-words text-text-200">
+                    안녕하세요! 기사 제목을 생성했습니다.
+                  </p>
+                  <p className="whitespace-normal break-words text-text-200">
+                    아래 {message.titles.length}개의 제목 중에서 가장 적합한 것을 선택하시거나, 수정하여 사용하실 수 있습니다:
+                  </p>
+                  <ol className="[&:not(:last-child)_ul]:pb-1 [&:not(:last-child)_ol]:pb-1 list-decimal space-y-2.5 pl-7">
                     {message.titles.map((title, index) => (
-                      <div
-                        key={index}
-                        className="group relative bg-bg-200 hover:bg-bg-300 rounded-lg p-3 transition-colors duration-200 border border-border-300 hover:border-border-200"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3 flex-1">
-                            <span className="text-text-400 text-sm font-medium shrink-0">
-                              {index + 1}.
-                            </span>
-                            <p className="text-text-100 leading-relaxed flex-1">
-                              {title}
-                            </p>
-                          </div>
+                      <li key={index} className="whitespace-normal break-words group relative">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="flex-1 text-text-100">
+                            {title}
+                          </span>
                           <button
                             onClick={() => handleCopyTitle(title, index)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 hover:bg-bg-400 rounded-md"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-bg-300 rounded-md shrink-0 ml-2"
                             title="복사"
                           >
                             {copiedIndex === index ? (
-                              <span className="text-xs text-accent-main-100">
-                                ✓
-                              </span>
+                              <span className="text-xs text-accent-main-100">✓</span>
                             ) : (
                               <Copy size={14} className="text-text-400" />
                             )}
                           </button>
                         </div>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ol>
+                  <p className="whitespace-normal break-words text-text-200 mt-2">
+                    추가로 다른 스타일의 제목이 필요하시거나, 특정 톤앤매너로 수정을 원하시면 말씀해 주세요.
+                  </p>
                   {message.model && (
-                    <div className="text-xs text-text-400 mt-3">
-                      모델: {message.model}
-                    </div>
+                    <p className="text-xs text-text-400 mt-2">
+                      사용 모델: {message.model}
+                    </p>
                   )}
                 </div>
               ) : message.isError ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-800">{message.content}</p>
+                <div className="grid-cols-1 grid gap-2.5 [&_>_*]:min-w-0">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-800 whitespace-normal break-words">{message.content}</p>
+                  </div>
                 </div>
               ) : (
-                <div className="grid-cols-1 grid gap-2.5">
+                <div className="grid-cols-1 grid gap-2.5 [&_>_*]:min-w-0">
                   {message.content.split("\n\n").map((paragraph, index) => (
                     <p key={index} className="whitespace-normal break-words">
                       {paragraph}

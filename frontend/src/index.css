@@ -508,4 +508,77 @@ body {
       rgba(0, 0, 0, 1) 3%
     );
   }
+
+  /* Typography Styles for Assistant Messages */
+  .assistant-message {
+    font-family: var(--font-claude-response);
+    letter-spacing: -0.015em;
+    line-height: 1.65rem;
+  }
+
+  /* Grid layout for message content */
+  .message-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .message-grid > * {
+    min-width: 0;
+  }
+
+  /* List Styles */
+  .assistant-message-list {
+    list-style-type: decimal;
+    padding-left: 1.75rem;
+    space-y: 0.625rem;
+  }
+
+  .assistant-message-list:not(:last-child) ul,
+  .assistant-message-list:not(:last-child) ol {
+    padding-bottom: 0.25rem;
+  }
+
+  .assistant-message-list li {
+    white-space: normal;
+    word-break: break-word;
+    position: relative;
+  }
+
+  .assistant-message-list li::marker {
+    color: hsl(var(--text-300));
+    font-weight: 500;
+  }
+
+  /* Paragraph styles */
+  .assistant-paragraph {
+    white-space: normal;
+    word-break: break-word;
+    color: hsl(var(--text-200));
+  }
+
+  /* Title list specific */
+  .title-list-item {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .title-list-item:hover .copy-button {
+    opacity: 1;
+  }
+
+  .copy-button {
+    opacity: 0;
+    transition: opacity 200ms;
+    padding: 0.25rem;
+    border-radius: 0.375rem;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+  }
+
+  .copy-button:hover {
+    background-color: hsl(var(--bg-300));
+  }
 }
