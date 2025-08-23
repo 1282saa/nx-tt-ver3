@@ -13,8 +13,8 @@ bedrock_runtime = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 # Claude 4.0 모델 설정
 CLAUDE_MODEL_ID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-MAX_TOKENS = 4096
-TEMPERATURE = 0.7
+MAX_TOKENS = 8192  # 최대 토큰으로 증가
+TEMPERATURE = 0.2  # 더 일관된 출력을 위해 낮춤
 
 def create_system_prompt(prompt_data: Dict[str, Any], engine_type: str) -> str:
     """

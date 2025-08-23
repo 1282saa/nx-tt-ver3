@@ -49,7 +49,23 @@ class WebSocketService {
         this.ws.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data);
-            console.log('📨 WebSocket 메시지 수신:', message.type);
+            
+            // 청크 메시지에 대한 상세 로깅
+            if (message.type === 'ai_chunk') {
+              console.log('📨 청크 수신:', {
+                type: message.type,
+                index: message.chunk_index,
+                chunk: message.chunk?.substring(0, 30) + '...',
+                length: message.chunk?.length
+              });
+            } else {
+              console.log('📨 WebSocket 메시지 수신:', {
+                type: message.type,
+                timestamp: message.timestamp,
+                ...(message.type === 'ai_start' && { startTime: new Date().toISOString() }),
+                ...(message.type === 'chat_end' && { totalChunks: message.total_chunks, responseLength: message.response_length })
+              });
+            }
             
             // 메시지 핸들러들 호출
             this.messageHandlers.forEach(handler => {
@@ -128,10 +144,12 @@ class WebSocketService {
           timestamp: new Date().toISOString()
         };
         
-        console.log('📤 메시지 전송:', {
-          message: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
+        console.log('📤 WebSocket 메시지 전송:', {
+          fullMessage: message,
+          messageLength: message.length,
           engineType,
-          action: payload.action
+          action: payload.action,
+          timestamp: payload.timestamp
         });
         
         this.ws.send(JSON.stringify(payload));
@@ -147,12 +165,14 @@ class WebSocketService {
   // 메시지 핸들러 등록
   onMessage(handler) {
     this.messageHandlers.push(handler);
+    console.log(`🎯 메시지 핸들러 등록됨 (총 ${this.messageHandlers.length}개)`);
     
     // 핸들러 제거 함수 반환
     return () => {
       const index = this.messageHandlers.indexOf(handler);
       if (index > -1) {
         this.messageHandlers.splice(index, 1);
+        console.log(`🗑️ 메시지 핸들러 제거됨 (남은 개수: ${this.messageHandlers.length})`);
       }
     };
   }

@@ -1,14 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plus, Settings, Search, ArrowUp } from "lucide-react";
 import clsx from "clsx";
-import { 
-  connectWebSocket, 
-  disconnectWebSocket, 
-  sendChatMessage, 
-  isWebSocketConnected 
+import {
+  connectWebSocket,
+  disconnectWebSocket,
+  sendChatMessage,
+  isWebSocketConnected,
 } from "../services/websocketService";
 
-const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated, engineType = "T5" }) => {
+const ChatInput = ({
+  onSendMessage,
+  onStartChat,
+  onTitlesGenerated,
+  engineType = "T5",
+}) => {
   const [message, setMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,37 +50,48 @@ const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated, engineType =
     e.preventDefault();
     if (message.trim() && !isLoading) {
       const messageText = message.trim();
-      
-      // 먼저 UI에 메시지 표시
+
+      // onStartChat가 있으면 ChatPage로 네비게이션 (MainContent에서 사용)
+      // 이 경우 WebSocket 메시지는 ChatPage에서 전송됨
       if (onStartChat) {
+        console.log("🔀 ChatPage로 네비게이션 - 메시지:", messageText);
         onStartChat(messageText);
-      } else if (onSendMessage) {
-        onSendMessage(messageText);
+        // MainContent에서는 WebSocket 메시지를 보내지 않음
+        // ChatPage가 초기화되면서 자동으로 전송함
+        setMessage("");
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+        return; // 여기서 종료
       }
       
-      // WebSocket으로 메시지 전송
-      if (isConnected) {
+      // onSendMessage가 있으면 현재 페이지에서 처리 (ChatPage에서 사용)
+      if (onSendMessage) {
+        onSendMessage(messageText);
+      }
+
+      // ChatPage에서만 WebSocket으로 메시지 전송
+      if (!onStartChat && isConnected) {
         setIsLoading(true);
         try {
-          console.log(`📤 ${engineType} 엔진으로 메시지 전송:`, messageText);
+          console.log(`${engineType} 엔진으로 메시지 전송:`, messageText);
           await sendChatMessage(messageText, engineType);
-          
+
           // WebSocket 응답은 별도의 리스너에서 처리
           // onTitlesGenerated는 WebSocket 메시지 핸들러에서 호출됨
-          
         } catch (error) {
           console.error("메시지 전송 실패:", error);
           // 에러 메시지 표시
           if (onTitlesGenerated) {
             onTitlesGenerated({
               error: true,
-              message: "메시지 전송에 실패했습니다. 연결을 확인해주세요."
+              message: "메시지 전송에 실패했습니다. 연결을 확인해주세요.",
             });
           }
         } finally {
           setIsLoading(false);
         }
-      } else {
+      } else if (!onStartChat && !isConnected) {
         console.warn("WebSocket이 연결되지 않았습니다. 재연결 시도 중...");
         // 재연결 시도
         try {
@@ -88,12 +104,12 @@ const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated, engineType =
           if (onTitlesGenerated) {
             onTitlesGenerated({
               error: true,
-              message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요."
+              message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요.",
             });
           }
         }
       }
-      
+
       setMessage("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -128,22 +144,18 @@ const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated, engineType =
   return (
     <fieldset className="flex w-full min-w-0 flex-col">
       <div
-        className="!box-content flex flex-col bg-bg-000 mx-0 items-stretch transition-all duration-200 relative cursor-text z-10 rounded-2xl border border-transparent"
+        className="!box-content flex flex-col bg-bg-000 mx-0 items-stretch transition-all duration-200 relative cursor-text z-10 rounded-2xl border border-border-300/15"
         style={{
-          boxShadow:
-            "0 0.25rem 1.25rem hsl(var(--always-black)/3.5%), 0 0 0 0.5px hsla(var(--border-300)/0.15)",
+          boxShadow: "0 0.25rem 1.25rem hsl(var(--always-black)/3.5%)",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.boxShadow =
-            "0 0.25rem 1.25rem hsl(var(--always-black)/3.5%), 0 0 0 0.5px hsla(var(--border-200)/0.3)";
+          e.currentTarget.style.boxShadow = "0 0.25rem 1.25rem hsl(var(--always-black)/3.5%)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.boxShadow =
-            "0 0.25rem 1.25rem hsl(var(--always-black)/3.5%), 0 0 0 0.5px hsla(var(--border-300)/0.15)";
+          e.currentTarget.style.boxShadow = "0 0.25rem 1.25rem hsl(var(--always-black)/3.5%)";
         }}
         onFocus={(e) => {
-          e.currentTarget.style.boxShadow =
-            "0 0.25rem 1.25rem hsl(var(--always-black)/7.5%), 0 0 0 0.5px hsla(var(--border-200)/0.3)";
+          e.currentTarget.style.boxShadow = "0 0.25rem 1.25rem hsl(var(--always-black)/7.5%)";
         }}
       >
         <div className="flex flex-col gap-3.5 m-3.5">
@@ -155,7 +167,9 @@ const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated, engineType =
                 value={message}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder={isConnected ? "오늘 어떤 도움을 드릴까요?" : "서버 연결 중..."}
+                placeholder={
+                  isConnected ? "오늘 어떤 도움을 드릴까요?" : "서버 연결 중..."
+                }
                 className="w-full min-h-[1.5rem] max-h-96 resize-none bg-transparent border-none outline-none text-text-100 placeholder-text-500 font-large leading-relaxed"
                 rows={1}
                 disabled={!isConnected}
@@ -208,13 +222,14 @@ const ChatInput = ({ onSendMessage, onStartChat, onTitlesGenerated, engineType =
               </div>
             </div>
 
-
             {/* Connection Status Indicator */}
             <div className="flex items-center gap-1">
-              <div className={clsx(
-                "w-2 h-2 rounded-full",
-                isConnected ? "bg-green-500" : "bg-red-500 animate-pulse"
-              )} />
+              <div
+                className={clsx(
+                  "w-2 h-2 rounded-full",
+                  isConnected ? "bg-green-500" : "bg-red-500 animate-pulse"
+                )}
+              />
             </div>
 
             {/* Send Button */}

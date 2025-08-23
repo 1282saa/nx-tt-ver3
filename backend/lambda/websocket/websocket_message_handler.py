@@ -97,13 +97,13 @@ def process_chat_message_with_bedrock(user_message, engine_type, connection_id, 
     """실제 Bedrock Claude를 사용한 채팅 메시지 처리"""
     
     try:
-        # 1. 처리 시작 알림
-        send_message_to_client(connection_id, {
-            'type': 'chat_start',
-            'engine': engine_type,
-            'message': f'{engine_type} 엔진으로 제목을 생성하고 있습니다...',
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        }, apigateway_client)
+        # 1. 처리 시작 알림 (제거 - UI에 표시하지 않음)
+        # send_message_to_client(connection_id, {
+        #     'type': 'chat_start',
+        #     'engine': engine_type,
+        #     'message': f'{engine_type} 엔진으로 제목을 생성하고 있습니다...',
+        #     'timestamp': datetime.utcnow().isoformat() + 'Z'
+        # }, apigateway_client)
         
         # 2. 프롬프트와 파일 데이터 로드
         logger.info(f"Loading prompt data for {engine_type}")
@@ -116,22 +116,22 @@ def process_chat_message_with_bedrock(user_message, engine_type, connection_id, 
         system_prompt = create_system_prompt_inline(prompt_data, engine_type)
         logger.info(f"System prompt created: {len(system_prompt)} characters")
         
-        # 4. 데이터베이스 조회 확인 메시지
+        # 4. 데이터베이스 조회 확인 메시지 (제거 - UI에 표시하지 않음)
         file_count = len(prompt_data.get('files', []))
-        send_message_to_client(connection_id, {
-            'type': 'data_loaded',
-            'engine': engine_type,
-            'prompt_length': len(system_prompt),
-            'file_count': file_count,
-            'message': f'{engine_type} 엔진 데이터 로드 완료 (파일 {file_count}개)',
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        }, apigateway_client)
+        # send_message_to_client(connection_id, {
+        #     'type': 'data_loaded',
+        #     'engine': engine_type,
+        #     'prompt_length': len(system_prompt),
+        #     'file_count': file_count,
+        #     'message': f'{engine_type} 엔진 데이터 로드 완료 (파일 {file_count}개)',
+        #     'timestamp': datetime.utcnow().isoformat() + 'Z'
+        # }, apigateway_client)
         
         # 5. Bedrock Claude 스트리밍 호출
         logger.info("Starting Bedrock Claude streaming")
+        # AI 시작 신호만 보내고 메시지는 표시하지 않음
         send_message_to_client(connection_id, {
             'type': 'ai_start',
-            'message': 'AI가 응답을 생성하고 있습니다...',
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         }, apigateway_client)
         
