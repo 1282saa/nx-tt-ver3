@@ -370,71 +370,73 @@ const AssistantMessage = ({ message }) => {
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  // Format message content for display
+  const formatContent = () => {
+    if (message.titles) {
+      return (
+        <>
+          <div className="whitespace-normal break-words">
+            안녕하세요! 기사 제목을 생성했습니다.
+          </div>
+          <div className="whitespace-normal break-words">
+            아래 {message.titles.length}개의 제목 중에서 가장 적합한 것을 선택하시거나, 수정하여 사용하실 수 있습니다:
+          </div>
+          <ol className="list-decimal space-y-2 pl-7">
+            {message.titles.map((title, index) => (
+              <li key={index} className="whitespace-normal break-words group/item relative">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="flex-1">{title}</span>
+                  <button
+                    onClick={() => handleCopyTitle(title, index)}
+                    className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 p-1 hover:bg-bg-300 rounded-md shrink-0 ml-2"
+                    title="복사"
+                  >
+                    {copiedIndex === index ? (
+                      <span className="text-xs text-accent-main-100">✓</span>
+                    ) : (
+                      <Copy size={14} className="text-text-400" />
+                    )}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="whitespace-normal break-words">
+            추가로 다른 스타일의 제목이 필요하시거나, 특정 톤앤매너로 수정을 원하시면 말씀해 주세요.
+          </div>
+        </>
+      );
+    } else if (message.isError) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="text-red-800 whitespace-normal break-words">
+            {message.content}
+          </div>
+        </div>
+      );
+    } else {
+      return message.content.split("\n\n").map((paragraph, index) => (
+        <div key={index} className="whitespace-normal break-words">
+          {paragraph}
+        </div>
+      ));
+    }
+  };
+
   return (
     <>
       <div data-test-render-count="1">
         <div style={{ height: "auto", opacity: 1, transform: "none" }}>
-          <div
-            data-is-streaming="false"
-            className="group relative -tracking-[0.015em] pb-3"
-            style={{ opacity: 1, transform: "none" }}
-          >
-            <div className="relative px-2 md:px-8">
-              {/* If message has titles array, display as styled list */}
-              {message.titles ? (
-                <div className="grid-cols-1 grid gap-2.5 [&_>_*]:min-w-0">
-                  <p className="whitespace-normal break-words text-text-200">
-                    안녕하세요! 기사 제목을 생성했습니다.
-                  </p>
-                  <p className="whitespace-normal break-words text-text-200">
-                    아래 {message.titles.length}개의 제목 중에서 가장 적합한 것을 선택하시거나, 수정하여 사용하실 수 있습니다:
-                  </p>
-                  <ol className="[&:not(:last-child)_ul]:pb-1 [&:not(:last-child)_ol]:pb-1 list-decimal space-y-2.5 pl-7">
-                    {message.titles.map((title, index) => (
-                      <li key={index} className="whitespace-normal break-words group relative">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="flex-1 text-text-100">
-                            {title}
-                          </span>
-                          <button
-                            onClick={() => handleCopyTitle(title, index)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-bg-300 rounded-md shrink-0 ml-2"
-                            title="복사"
-                          >
-                            {copiedIndex === index ? (
-                              <span className="text-xs text-accent-main-100">✓</span>
-                            ) : (
-                              <Copy size={14} className="text-text-400" />
-                            )}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="whitespace-normal break-words text-text-200 mt-2">
-                    추가로 다른 스타일의 제목이 필요하시거나, 특정 톤앤매너로 수정을 원하시면 말씀해 주세요.
-                  </p>
-                  {message.model && (
-                    <p className="text-xs text-text-400 mt-2">
-                      사용 모델: {message.model}
-                    </p>
+          <div className="group relative -tracking-[0.015em] pb-3">
+            <div className="font-claude-response relative leading-[1.65rem] px-2 md:px-8">
+              <div>
+                <div className="grid-cols-1 grid gap-2.5">
+                  {formatContent()}
+                  {message.isStreaming && (
+                    <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
                   )}
                 </div>
-              ) : message.isError ? (
-                <div className="grid-cols-1 grid gap-2.5 [&_>_*]:min-w-0">
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-800 whitespace-normal break-words">{message.content}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid-cols-1 grid gap-2.5 [&_>_*]:min-w-0">
-                  {message.content.split("\n\n").map((paragraph, index) => (
-                    <p key={index} className="whitespace-normal break-words">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              )}
+              </div>
             </div>
           </div>
 
