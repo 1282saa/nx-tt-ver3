@@ -36,7 +36,7 @@ const ChatPage = ({
   selectedEngine = "T5",
   onBack,
   onLogout,
-  onBackToLanding,
+  onBackToLanding
 }) => {
   const [messages, setMessages] = useState(() => {
     console.log("🎯 ChatPage 초기화 - initialMessage:", initialMessage);
@@ -59,6 +59,7 @@ const ChatPage = ({
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const itemRefs = useRef(new Map());
   const [isConnected, setIsConnected] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const currentAssistantMessageId = useRef(null);
@@ -108,9 +109,9 @@ const ChatPage = ({
       });
     }
 
-    // 버퍼에 남은 청크가 있으면 다시 타임아웃 설정
+    // 버퍼에 남은 청크가 있으면 다시 타임아웃 설정 (더 부드러운 타이핑을 위해 80ms로 조정)
     if (buffer.size > 0) {
-      processBufferTimeoutRef.current = setTimeout(processChunkBuffer, 100);
+      processBufferTimeoutRef.current = setTimeout(processChunkBuffer, 50);
     }
   };
 
@@ -211,7 +212,7 @@ const ChatPage = ({
                 currentTotal: streamingContent.length
               });
               
-              // 바로 스트리밍 content에 추가
+              // 부드러운 타이핑을 위한 배치 처리
               setStreamingContent((prev) => {
                 const newContent = prev + chunkText;
                 console.log(`📊 스트리밍 진행:`, {
@@ -221,14 +222,16 @@ const ChatPage = ({
                   preview: newContent.substring(0, 50)
                 });
                 
-                // 메시지 업데이트
-                setMessages((prevMessages) =>
-                  prevMessages.map((msg) =>
-                    msg.id === currentAssistantMessageId.current
-                      ? { ...msg, content: newContent }
-                      : msg
-                  )
-                );
+                // requestAnimationFrame으로 부드러운 업데이트 보장
+                requestAnimationFrame(() => {
+                  setMessages((prevMessages) =>
+                    prevMessages.map((msg) =>
+                      msg.id === currentAssistantMessageId.current
+                        ? { ...msg, content: newContent }
+                        : msg
+                    )
+                  );
+                });
                 
                 return newContent;
               });
@@ -387,37 +390,94 @@ const ChatPage = ({
     };
   }, []); // 빈 dependency 배열로 한 번만 실행
 
-  // 페이지 하단으로 스크롤하는 함수
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
+  // ref 등록 함수
+  const registerItemRef = (id) => (el) => {
+    if (!el) {
+      itemRefs.current.delete(id);
+    } else {
+      itemRefs.current.set(id, el);
     }
   };
 
+  // 메시지를 화면 상단에 정밀하게 위치시키는 스크롤
+  const HEADER_HEIGHT = 64; // Header 컴포넌트 높이 (h-16)
+  const TOP_GAP = 20;       // 상단 여백
+  
+  const scrollMessageToTop = (id) => {
+    const container = scrollContainerRef.current;
+    const el = itemRefs.current.get(String(id));
+    
+    if (!container || !el) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const messageRect = el.getBoundingClientRect();
+    const currentScrollTop = container.scrollTop;
+    
+    // 컨테이너 기준 상대 top에서 헤더/여백 보정
+    const delta = (messageRect.top - containerRect.top) - TOP_GAP;
+    
+    container.scrollTo({ 
+      top: currentScrollTop + delta, 
+      behavior: 'smooth' 
+    });
+  };
+
+  // 스트리밍 중 사용자 메시지 위치 유지 (ResizeObserver 사용)
+  useEffect(() => {
+    // 마지막 메시지가 사용자 메시지일 때만 관찰
+    const lastUserMessage = messages.filter(m => m.type === 'user').slice(-1)[0];
+    if (!lastUserMessage || !isLoading) return;
+    
+    const el = itemRefs.current.get(String(lastUserMessage.id));
+    if (!el) return;
+    
+    // AI 응답이 길어져도 사용자 메시지를 상단에 유지
+    const observer = new ResizeObserver(() => {
+      scrollMessageToTop(String(lastUserMessage.id));
+    });
+    
+    // 다음 AI 응답 메시지 관찰
+    const aiMessages = document.querySelectorAll('[data-message-type="assistant"]');
+    aiMessages.forEach(msg => observer.observe(msg));
+    
+    // 3초 후 자동 해제 (필요시 조정)
+    const timeout = setTimeout(() => observer.disconnect(), 3000);
+    
+    return () => {
+      observer.disconnect();
+      clearTimeout(timeout);
+    };
+  }, [messages, isLoading]);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (currentMessage.trim() && !isLoading) {
-      const userMessage = {
-        id: messages.length + 1,
-        type: "user",
-        content: currentMessage.trim(),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
-      setCurrentMessage("");
-      setIsTyping(false);
-      setIsLoading(true);
-      setError(null);
+    if (!currentMessage.trim() || isLoading) return;
+    
+    const id = crypto.randomUUID();
+    const userMessage = {
+      id,  // 문자열 ID
+      type: "user",
+      content: currentMessage.trim(),
+      timestamp: new Date(),
+    };
+    
+    setMessages((prev) => [...prev, userMessage]);
+    setCurrentMessage("");
+    setIsTyping(false);
+    setIsLoading(true);
+    setError(null);
 
-      // 자동 크기 조절 리셋
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
+    // textarea 높이 리셋
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    
+    // 렌더 완료 직후 1프레임에서 상단 정렬
+    requestAnimationFrame(() => {
+      scrollMessageToTop(id);
+    });
 
-      try {
+    try {
         // WebSocket으로 메시지 전송
         if (isConnected) {
           console.log(
@@ -442,7 +502,7 @@ const ChatPage = ({
         setIsLoading(false);
 
         const errorMessage = {
-          id: messages.length + 2,
+          id: crypto.randomUUID(),
           type: "assistant",
           content: `죄송합니다. 메시지 전송 중 오류가 발생했습니다: ${err.message}`,
           timestamp: new Date(),
@@ -450,13 +510,7 @@ const ChatPage = ({
         };
 
         setMessages((prev) => [...prev, errorMessage]);
-      } finally {
-        // 메시지 전송 후 하단으로 스크롤
-        setTimeout(() => {
-          scrollToBottom();
-        }, 100);
       }
-    }
   };
 
   const handleInputChange = (e) => {
@@ -477,12 +531,17 @@ const ChatPage = ({
     }
   };
 
-  // 메시지가 추가될 때마다 하단으로 스크롤
+  // 메시지가 추가될 때마다 최근 사용자 메시지를 상단에 위치
   useEffect(() => {
-    setTimeout(() => {
-      scrollToBottom();
-    }, 100);
-  }, [messages, isLoading]);
+    // 새 사용자 메시지가 추가되었을 때만 스크롤
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.type === "user") {
+      // requestAnimationFrame으로 렌더링 완료 후 스크롤
+      requestAnimationFrame(() => {
+        scrollMessageToTop(String(lastMessage.id));
+      });
+    }
+  }, [messages]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -505,7 +564,12 @@ const ChatPage = ({
           >
             {/* Messages */}
             {messages.map((message) => (
-              <div key={message.id} data-test-render-count="8">
+              <div 
+                key={message.id}
+                ref={registerItemRef(String(message.id))}
+                data-test-render-count="8"
+                data-message-type={message.type}
+              >
                 {message.type === "user" ? (
                   <UserMessage message={message} />
                 ) : (
@@ -616,7 +680,8 @@ const ChatPage = ({
       </div>
     </div>
   );
-};
+};  
+
 
 const UserMessage = ({ message }) => (
   <div className="mb-1 mt-1">
@@ -937,7 +1002,14 @@ const AssistantMessage = ({ message }) => {
   return (
     <>
       <div data-test-render-count="1" className="mb-1 mt-1">
-        <div style={{ height: "auto", opacity: 1, transform: "none" }}>
+        <div 
+          style={{ 
+            height: "auto", 
+            opacity: 1, 
+            transform: "none",
+            transition: "opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+          }}
+        >
           <div className="group relative pb-3">
             <div
               className="relative pl-2.5 pr-2"
@@ -951,7 +1023,12 @@ const AssistantMessage = ({ message }) => {
               }}
             >
               <div>
-                <div className="grid-cols-1 grid gap-2.5">
+                <div 
+                  className="grid-cols-1 grid gap-2.5"
+                  style={{
+                    animation: message.isStreaming ? "subtle-pulse 2s ease-in-out infinite" : "none"
+                  }}
+                >
                   {formatContent()}
                 </div>
               </div>

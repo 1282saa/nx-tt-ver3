@@ -162,6 +162,39 @@ class WebSocketService {
     });
   }
 
+  // 제목 제안 요청
+  requestTitleSuggestions(conversation, engineType = 'T5') {
+    return new Promise((resolve, reject) => {
+      if (!this.isWebSocketConnected()) {
+        reject(new Error('WebSocket이 연결되지 않았습니다'));
+        return;
+      }
+
+      try {
+        const payload = {
+          action: 'generateTitles',
+          conversation: conversation,
+          engineType: engineType,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.log('📤 제목 제안 요청:', {
+          conversationLength: conversation.length,
+          engineType,
+          action: payload.action,
+          timestamp: payload.timestamp
+        });
+        
+        this.ws.send(JSON.stringify(payload));
+        resolve();
+        
+      } catch (error) {
+        console.error('제목 제안 요청 실패:', error);
+        reject(error);
+      }
+    });
+  }
+
   // 메시지 핸들러 등록
   onMessage(handler) {
     this.messageHandlers.push(handler);
@@ -207,6 +240,7 @@ export default websocketService;
 export const connectWebSocket = () => websocketService.connect();
 export const disconnectWebSocket = () => websocketService.disconnect();
 export const sendChatMessage = (message, engineType) => websocketService.sendMessage(message, engineType);
+export const requestTitleSuggestions = (conversation, engineType) => websocketService.requestTitleSuggestions(conversation, engineType);
 export const onWebSocketMessage = (handler) => websocketService.onMessage(handler);
 export const onWebSocketConnection = (handler) => websocketService.onConnection(handler);
 export const isWebSocketConnected = () => websocketService.isWebSocketConnected();

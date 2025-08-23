@@ -17,6 +17,7 @@ const Header = ({
   onLogout,
   onAdminLogin,
   onHome,
+  chatTitle,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const userDropdownRef = useRef(null);
@@ -90,6 +91,15 @@ const Header = ({
               <Menu size={24} />
             </button>
           </div>
+
+          {/* 채팅 제목 (가운데) */}
+          {chatTitle && (
+            <div className="flex-1 flex justify-center mx-4">
+              <h1 className="text-text-100 font-medium text-sm lg:text-base truncate max-w-md">
+                {chatTitle}
+              </h1>
+            </div>
+          )}
 
           <div className="ml-auto flex items-center space-x-4">
             <div className="hidden md:block">

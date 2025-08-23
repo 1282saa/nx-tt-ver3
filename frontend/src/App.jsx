@@ -5,6 +5,8 @@ import ChatPage from "./components/ChatPage";
 import LoginPage from "./components/LoginPage";
 import SignUpPage from "./components/SignUpPage";
 import LandingPage from "./components/LandingPage";
+import { PageTransition } from "./components/PageTransition";
+import { AnimatePresence } from 'framer-motion';
 
 function AppContent() {
   const navigate = useNavigate();
@@ -57,6 +59,9 @@ function AppContent() {
   };
 
   const handleStartChat = (message) => {
+    console.log('🚀 handleStartChat called with:', message);
+    // localStorage에 임시 저장 (페이지 전환 중 데이터 보존)
+    localStorage.setItem('pendingMessage', message);
     setChatMessage(message);
     const enginePath = selectedEngine.toLowerCase();
     navigate(`/${enginePath}/chat`);
@@ -114,6 +119,14 @@ function AppContent() {
     navigate("/");
   };
 
+  const handleTitleUpdate = (newTitle) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      title: newTitle
+    }));
+    console.log("📝 앱 제목 업데이트됨:", newTitle);
+  };
+
   return (
     <div
       className="flex w-full overflow-x-clip"
@@ -124,16 +137,19 @@ function AppContent() {
       }}
     >
       <div className="min-h-full w-full min-w-0 flex-1">
-        <Routes>
-          <Route 
-            path="/" 
-            element={
-              <LandingPage
-                onSelectEngine={handleSelectEngine}
-                onLogin={handleLogin}
-              />
-            } 
-          />
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route 
+              path="/" 
+              element={
+                <PageTransition pageKey="landing">
+                  <LandingPage
+                    onSelectEngine={handleSelectEngine}
+                    onLogin={handleLogin}
+                  />
+                </PageTransition>
+              } 
+            />
           <Route 
             path="/login" 
             element={
@@ -153,63 +169,74 @@ function AppContent() {
               />
             } 
           />
-          <Route 
-            path="/t5" 
-            element={
-              <MainContent
-                project={currentProject}
-                userRole={userRole}
-                selectedEngine="T5"
-                onToggleStar={toggleStar}
-                onStartChat={handleStartChat}
-                onLogout={handleLogout}
-                onBackToLanding={handleBackToLanding}
-              />
-            } 
-          />
-          <Route 
-            path="/h8" 
-            element={
-              <MainContent
-                project={currentProject}
-                userRole={userRole}
-                selectedEngine="H8"
-                onToggleStar={toggleStar}
-                onStartChat={handleStartChat}
-                onLogout={handleLogout}
-                onBackToLanding={handleBackToLanding}
-              />
-            } 
-          />
-          <Route 
-            path="/t5/chat" 
-            element={
-              <ChatPage
-                initialMessage={chatMessage}
-                userRole={userRole}
-                selectedEngine="T5"
-                onBack={handleBackToMain}
-                onLogout={handleLogout}
-                onBackToLanding={handleBackToLanding}
-              />
-            } 
-          />
-          <Route 
-            path="/h8/chat" 
-            element={
-              <ChatPage
-                initialMessage={chatMessage}
-                userRole={userRole}
-                selectedEngine="H8"
-                onBack={handleBackToMain}
-                onLogout={handleLogout}
-                onBackToLanding={handleBackToLanding}
-              />
-            } 
-          />
-          {/* 기본 리다이렉트 */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route 
+              path="/t5" 
+              element={
+                <PageTransition pageKey="main-t5">
+                  <MainContent
+                    project={currentProject}
+                    userRole={userRole}
+                    selectedEngine="T5"
+                    onToggleStar={toggleStar}
+                    onStartChat={handleStartChat}
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                  />
+                </PageTransition>
+              } 
+            />
+            <Route 
+              path="/h8" 
+              element={
+                <PageTransition pageKey="main-h8">
+                  <MainContent
+                    project={currentProject}
+                    userRole={userRole}
+                    selectedEngine="H8"
+                    onToggleStar={toggleStar}
+                    onStartChat={handleStartChat}
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                  />
+                </PageTransition>
+              } 
+            />
+            <Route 
+              path="/t5/chat" 
+              element={
+                <PageTransition pageKey="chat-t5">
+                  <ChatPage
+                    initialMessage={location.state?.initialMessage || chatMessage}
+                    userRole={userRole}
+                    selectedEngine="T5"
+                    onBack={handleBackToMain}
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onTitleUpdate={handleTitleUpdate}
+                  />
+                </PageTransition>
+              } 
+            />
+            <Route 
+              path="/h8/chat" 
+              element={
+                <PageTransition pageKey="chat-h8">
+                  <ChatPage
+                    initialMessage={location.state?.initialMessage || chatMessage}
+                    userRole={userRole}
+                    selectedEngine="H8"
+                    onBack={handleBackToMain}
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onTitleUpdate={handleTitleUpdate}
+                  />
+                </PageTransition>
+              } 
+            />
+            {/* 기본 리다이렉트 */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -55,13 +55,13 @@ const ChatInput = ({
       // 이 경우 WebSocket 메시지는 ChatPage에서 전송됨
       if (onStartChat) {
         console.log("🔀 ChatPage로 네비게이션 - 메시지:", messageText);
-        onStartChat(messageText);
-        // MainContent에서는 WebSocket 메시지를 보내지 않음
-        // ChatPage가 초기화되면서 자동으로 전송함
+        // 메시지 초기화를 먼저 하여 중복 호출 방지
         setMessage("");
         if (textareaRef.current) {
           textareaRef.current.style.height = "auto";
         }
+        // 그 다음 페이지 전환
+        onStartChat(messageText);
         return; // 여기서 종료
       }
       
@@ -125,8 +125,9 @@ const ChatInput = ({
   };
 
   const handleInputChange = (e) => {
-    setMessage(e.target.value);
-    setIsTyping(e.target.value.length > 0);
+    const value = e.target.value;
+    setMessage(value);
+    setIsTyping(value.length > 0);
 
     // Auto-resize textarea
     if (textareaRef.current) {
