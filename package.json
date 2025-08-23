@@ -1,38 +1,18 @@
 {
-  "name": "claude-interface-clone",
+  "name": "nx-tt-dev-ver3",
   "version": "1.0.0",
-  "type": "module",
-  "description": "Claude AI 웹 인터페이스 클론",
-  "main": "index.js",
+  "description": "Nexus Title Generation Service",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "serve": "serve -s dist"
+    "dev": "npm run dev:frontend",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "preview:frontend": "cd frontend && npm run preview",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:frontend",
+    "deploy:backend": "cd backend && sam deploy --guided",
+    "test:backend": "cd backend && python test_real_article.py"
   },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lucide-react": "^0.263.1",
-    "clsx": "^1.2.1"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.15",
-    "@types/react-dom": "^18.2.7",
-    "@vitejs/plugin-react": "^4.0.3",
-    "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.27",
-    "tailwindcss": "^3.3.3",
-    "vite": "^4.4.5",
-    "serve": "^14.2.1"
-  },
-  "keywords": [
-    "react",
-    "claude",
-    "ai",
-    "interface",
-    "clone"
-  ],
-  "author": "Claude Interface Clone",
-  "license": "MIT"
+  "keywords": ["nexus", "title-generation", "bedrock", "claude"],
+  "author": "",
+  "license": "ISC"
 }

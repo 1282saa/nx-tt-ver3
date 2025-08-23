@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: nx-tt-dev-ver3 - Title Generation Service using Bedrock Claude Sonnet 4
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: nx-tt-dev-ver3
+    Description: Project prefix for all resources
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+    Environment:
+      Variables:
+        AWS_REGION: us-east-1
+
+Resources:
+  TitleGenerationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: lambda_handler.lambda_handler
+      FunctionName: !Sub ${ProjectPrefix}-title-generation
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: 
+                - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /generate-titles
+            Method: POST
+        ApiEventOptions:
+          Type: Api
+          Properties:
+            Path: /generate-titles
+            Method: OPTIONS
+
+  # API Gateway 설정
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${ProjectPrefix}-api
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate-titles"
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt TitleGenerationFunction.Arn

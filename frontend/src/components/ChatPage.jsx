@@ -10,9 +10,11 @@ import {
   ThumbsDown,
   RotateCcw,
   Edit3,
+  Loader2,
 } from "lucide-react";
 import Header from "./Header";
 import clsx from "clsx";
+import { generateTitles, generateTitlesMock } from "../services/api";
 
 const ChatPage = ({
   initialMessage,
@@ -21,24 +23,22 @@ const ChatPage = ({
   onLogout,
   onBackToLanding,
 }) => {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: "user",
-      content: initialMessage || "adad",
-      timestamp: new Date(),
-    },
-    {
-      id: 2,
-      type: "assistant",
-      content: `I can see you've uploaded some documents, but they appear to contain placeholder text ("ADADAD" and "SDSDSD"). Your message also just says "adad" which seems like it might be test input as well.
-
-Could you clarify what you'd like help with? If you have actual documents you'd like me to analyze or if there's a specific task you need assistance with, please let me know and I'll be happy to help!`,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState(
+    initialMessage
+      ? [
+          {
+            id: 1,
+            type: "user",
+            content: initialMessage,
+            timestamp: new Date(),
+          },
+        ]
+      : []
+  );
   const [currentMessage, setCurrentMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -50,28 +50,63 @@ Could you clarify what you'd like help with? If you have actual documents you'd 
     });
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (currentMessage.trim()) {
-      const newMessage = {
+    if (currentMessage.trim() && !isLoading) {
+      const userMessage = {
         id: messages.length + 1,
         type: "user",
         content: currentMessage.trim(),
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages((prev) => [...prev, userMessage]);
       setCurrentMessage("");
       setIsTyping(false);
+      setIsLoading(true);
+      setError(null);
 
       // 자동 크기 조절 리셋
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
 
-      // 메시지 전송 후 하단으로 스크롤
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      try {
+        // 개발 환경에서는 Mock 사용, 프로덕션에서는 실제 API 사용
+        const useMock = import.meta.env.VITE_USE_MOCK === "true";
+        const generateFn = useMock ? generateTitlesMock : generateTitles;
+
+        const result = await generateFn(userMessage.content);
+
+        const assistantMessage = {
+          id: messages.length + 2,
+          type: "assistant",
+          content: "", // Content is now handled by the titles array
+          timestamp: new Date(),
+          titles: result.titles, // 제목 배열 저장
+          model: result.model, // 모델 정보 저장
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (err) {
+        console.error("제목 생성 오류:", err);
+        setError(err.message || "제목 생성 중 오류가 발생했습니다.");
+
+        const errorMessage = {
+          id: messages.length + 2,
+          type: "assistant",
+          content: `죄송합니다. 제목 생성 중 오류가 발생했습니다: ${err.message}`,
+          timestamp: new Date(),
+          isError: true,
+        };
+
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+        // 메시지 전송 후 하단으로 스크롤
+        setTimeout(() => {
+          scrollToBottom();
+        }, 100);
+      }
     }
   };
 
@@ -125,6 +160,35 @@ Could you clarify what you'd like help with? If you have actual documents you'd 
                 )}
               </div>
             ))}
+
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="mb-1 mt-1">
+                <div className="flex items-center gap-3 text-text-300">
+                  <div className="ml-1">
+                    <div className="w-8 text-accent-brand inline-block">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 100 100"
+                        className="w-full fill-current animate-pulse"
+                      >
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="8"
+                          fill="currentColor"
+                          opacity="0.6"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="animate-spin" size={16} />
+                    <span className="text-sm">제목을 생성하고 있습니다...</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 스크롤 타겟 */}
             <div ref={messagesEndRef} />
@@ -297,159 +361,147 @@ const UserMessage = ({ message }) => (
   </div>
 );
 
-const AssistantMessage = ({ message }) => (
-  <div data-test-render-count="1">
-    <div style={{ height: "auto", opacity: 1, transform: "none" }}>
-      <div
-        data-is-streaming="false"
-        className="group relative -tracking-[0.015em] pb-3"
-        style={{ opacity: 1, transform: "none" }}
-      >
-        <div
-          className="relative"
-          style={{
-            WebkitTextSizeAdjust: "100%",
-            tabSize: 4,
-            fontVariationSettings: "normal",
-            WebkitTapHighlightColor: "transparent",
-            WebkitFontSmoothing: "antialiased",
-            fontFeatureSettings: '"ss01"',
-            color: "hsl(var(--text-100)/var(--tw-text-opacity))",
-            pointerEvents: "auto",
-            letterSpacing: "-0.015em",
-            border: "0 solid",
-            "--tw-border-spacing-x": "0",
-            "--tw-border-spacing-y": "0",
-            "--tw-translate-x": "0",
-            "--tw-translate-y": "0",
-            "--tw-rotate": "0",
-            "--tw-skew-x": "0",
-            "--tw-skew-y": "0",
-            "--tw-scale-x": "1",
-            "--tw-scale-y": "1",
-            "--tw-pan-x": "",
-            "--tw-pan-y": "",
-            "--tw-pinch-zoom": "",
-            "--tw-scroll-snap-strictness": "proximity",
-            "--tw-gradient-from-position": "",
-            "--tw-gradient-via-position": "",
-            "--tw-gradient-to-position": "",
-            "--tw-ordinal": "",
-            "--tw-slashed-zero": "",
-            "--tw-numeric-figure": "",
-            "--tw-numeric-spacing": "",
-            "--tw-numeric-fraction": "",
-            "--tw-ring-inset": "",
-            "--tw-ring-offset-width": "0px",
-            "--tw-ring-offset-color": "#fff",
-            "--tw-ring-color": "hsl(var(--accent-secondary-100)/1)",
-            "--tw-ring-offset-shadow": "0 0 #0000",
-            "--tw-ring-shadow": "0 0 #0000",
-            "--tw-shadow": "0 0 #0000",
-            "--tw-shadow-colored": "0 0 #0000",
-            "--tw-blur": "",
-            "--tw-brightness": "",
-            "--tw-contrast": "",
-            "--tw-grayscale": "",
-            "--tw-hue-rotate": "",
-            "--tw-invert": "",
-            "--tw-saturate": "",
-            "--tw-sepia": "",
-            "--tw-drop-shadow": "",
-            "--tw-backdrop-blur": "",
-            "--tw-backdrop-brightness": "",
-            "--tw-backdrop-contrast": "",
-            "--tw-backdrop-grayscale": "",
-            "--tw-backdrop-hue-rotate": "",
-            "--tw-backdrop-invert": "",
-            "--tw-backdrop-opacity": "",
-            "--tw-backdrop-saturate": "",
-            "--tw-backdrop-sepia": "",
-            "--tw-contain-size": "",
-            "--tw-contain-layout": "",
-            "--tw-contain-paint": "",
-            "--tw-contain-style": "",
-            boxSizing: "border-box",
-            outlineColor: "hsl(var(--accent-secondary-100))",
-            scrollbarWidth: "thin",
-            scrollbarColor: "hsla(var(--border-300)/35%) transparent",
-            position: "relative",
-            fontSize: "16px",
-            lineHeight: "1.65rem",
-            fontFamily: "var(--font-claude-response)",
-            padding: "0px 32px 0px 8px",
-            display: "grid",
-            gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
-            gap: "0.625rem",
-          }}
-        >
-          <div>
-            <div className="grid-cols-1 grid gap-2.5">
-              {message.content.split("\n\n").map((paragraph, index) => (
-                <p key={index} className="whitespace-normal break-words">
-                  {paragraph}
-                </p>
-              ))}
+const AssistantMessage = ({ message }) => {
+  const [copiedIndex, setCopiedIndex] = React.useState(null);
+
+  const handleCopyTitle = (title, index) => {
+    navigator.clipboard.writeText(title);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  return (
+    <>
+      <div data-test-render-count="1">
+        <div style={{ height: "auto", opacity: 1, transform: "none" }}>
+          <div
+            data-is-streaming="false"
+            className="group relative -tracking-[0.015em] pb-3"
+            style={{ opacity: 1, transform: "none" }}
+          >
+            <div className="relative px-2 md:px-8">
+              {/* If message has titles array, display as cards */}
+              {message.titles ? (
+                <div className="space-y-3">
+                  <div className="text-sm text-text-300 mb-4">
+                    생성된 {message.titles.length}개의 제목:
+                  </div>
+                  <div className="grid gap-2">
+                    {message.titles.map((title, index) => (
+                      <div
+                        key={index}
+                        className="group relative bg-bg-200 hover:bg-bg-300 rounded-lg p-3 transition-colors duration-200 border border-border-300 hover:border-border-200"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1">
+                            <span className="text-text-400 text-sm font-medium shrink-0">
+                              {index + 1}.
+                            </span>
+                            <p className="text-text-100 leading-relaxed flex-1">
+                              {title}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopyTitle(title, index)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 hover:bg-bg-400 rounded-md"
+                            title="복사"
+                          >
+                            {copiedIndex === index ? (
+                              <span className="text-xs text-accent-main-100">
+                                ✓
+                              </span>
+                            ) : (
+                              <Copy size={14} className="text-text-400" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {message.model && (
+                    <div className="text-xs text-text-400 mt-3">
+                      모델: {message.model}
+                    </div>
+                  )}
+                </div>
+              ) : message.isError ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-800">{message.content}</p>
+                </div>
+              ) : (
+                <div className="grid-cols-1 grid gap-2.5">
+                  {message.content.split("\n\n").map((paragraph, index) => (
+                    <p key={index} className="whitespace-normal break-words">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex flex-col gap-2 py-2"></div>
-        </div>
 
-        <div
-          className="absolute bottom-1 right-2 pointer-events-none z-10"
-          style={{ transform: "none" }}
-        >
-          <div className="rounded-lg transition min-w-max pointer-events-auto translate-x-2 pt-2">
-            <div className="text-text-300 flex items-stretch justify-between">
-              <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 w-8 rounded-md active:scale-95 select-auto">
-                <Copy size={20} />
-              </button>
-              <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 w-8 rounded-md active:scale-95 select-auto">
-                <ThumbsUp size={20} />
-              </button>
-              <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 w-8 rounded-md active:scale-95 select-auto">
-                <ThumbsDown size={20} />
-              </button>
-              <div className="flex items-center">
-                <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 rounded-md px-3 min-w-[4rem] active:scale-[0.985] whitespace-nowrap !text-xs pl-2.5 pr-2 gap-1 !font-base select-none !pl-2 !pr-1">
-                  재시도
-                  <ChevronDown size={20} className="text-text-500" />
+          <div
+            className="absolute bottom-1 right-2 pointer-events-none z-10"
+            style={{ transform: "none" }}
+          >
+            <div className="rounded-lg transition min-w-max pointer-events-auto translate-x-2 pt-2">
+              <div className="text-text-300 flex items-stretch justify-between">
+                <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 w-8 rounded-md active:scale-95 select-auto">
+                  <Copy size={20} />
                 </button>
+                <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 w-8 rounded-md active:scale-95 select-auto">
+                  <ThumbsUp size={20} />
+                </button>
+                <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 w-8 rounded-md active:scale-95 select-auto">
+                  <ThumbsDown size={20} />
+                </button>
+                <div className="flex items-center">
+                  <button className="inline-flex items-center justify-center relative shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none text-text-300 border-transparent transition font-ui tracking-tight duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] hover:bg-bg-300 hover:text-text-100 h-8 rounded-md px-3 min-w-[4rem] active:scale-[0.985] whitespace-nowrap !text-xs pl-2.5 pr-2 gap-1 !font-base select-none !pl-2 !pr-1">
+                    재시도
+                    <ChevronDown size={20} className="text-text-500" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    {/* Claude Logo */}
-    <div>
-      <div className="ml-1 mt-0.5 flex items-center transition-transform duration-300 ease-out">
-        <div className="p-1 -translate-x-px">
-          <div className="w-8 text-accent-brand inline-block select-none">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 100 100"
-              className="w-full fill-current"
+      <div>
+        {/* Claude Logo */}
+        <div className="ml-1 mt-0.5 flex items-center transition-transform duration-300 ease-out">
+          <div className="p-1 -translate-x-px">
+            <div className="w-8 text-accent-brand inline-block select-none">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 100 100"
+                className="w-full fill-current"
+              >
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="8"
+                  fill="currentColor"
+                  opacity="0.6"
+                />
+              </svg>
+            </div>
+          </div>
+          <div className="text-text-500 px-2 mt-6 flex-1 text-right text-[0.65rem] leading-[0.85rem] tracking-tighter sm:text-[0.75rem]">
+            <a
+              target="_blank"
+              className="inline-block select-none opacity-90 delay-300 duration-700 hover:text-text-300 transition"
+              href="https://support.anthropic.com/en/articles/8525154-claude-is-providing-incorrect-or-misleading-responses-what-s-going-on"
             >
-              <circle cx="50" cy="50" r="8" fill="currentColor" opacity="0.6" />
-            </svg>
+              Claude는 실수를 할 수 있습니다. <br className="block sm:hidden" />
+              응답을 반드시 다시 확인해 주세요.
+            </a>
           </div>
         </div>
-        <div className="text-text-500 px-2 mt-6 flex-1 text-right text-[0.65rem] leading-[0.85rem] tracking-tighter sm:text-[0.75rem]">
-          <a
-            target="_blank"
-            className="inline-block select-none opacity-90 delay-300 duration-700 hover:text-text-300 transition"
-            href="https://support.anthropic.com/en/articles/8525154-claude-is-providing-incorrect-or-misleading-responses-what-s-going-on"
-          >
-            Claude는 실수를 할 수 있습니다. <br className="block sm:hidden" />
-            응답을 반드시 다시 확인해 주세요.
-          </a>
-        </div>
       </div>
-    </div>
-  </div>
-);
+    </>
+  );
+};
 
 const ClaudeLogo = () => (
   <svg

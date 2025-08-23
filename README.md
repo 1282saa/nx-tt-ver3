@@ -1,61 +1,92 @@
-# Claude Interface Clone
+# nx-tt-dev-ver3 - Nexus Title Generation Service
 
-클로드 AI 웹 인터페이스의 완벽한 React 클론입니다.
+AI 기반 뉴스 제목 생성 서비스 (Claude Sonnet 4 활용)
 
-## 🚀 특징
+## 🚀 프로젝트 구조
 
-- **완벽한 디자인 복제**: 원본 Claude.ai와 동일한 UI/UX
-- **반응형 디자인**: 모바일, 태블릿, 데스크톱 모든 화면 크기 지원
-- **컴포넌트 기반 구조**: 재사용 가능한 React 컴포넌트
-- **현대적인 기술 스택**: React 18 + Vite + Tailwind CSS
-- **부드러운 애니메이션**: 원본과 동일한 트랜지션 효과
+```
+nx-tt-dev-ver3/
+├── frontend/                # 프론트엔드 애플리케이션
+│   ├── src/                # React 소스 코드
+│   │   ├── components/     # React 컴포넌트
+│   │   └── services/       # API 서비스
+│   ├── public/             # 정적 파일
+│   ├── index.html          # HTML 엔트리
+│   ├── vite.config.js      # Vite 설정
+│   ├── tailwind.config.js  # Tailwind CSS 설정
+│   └── package.json        # 프론트엔드 의존성
+│
+├── backend/                 # 백엔드 서버리스 함수
+│   ├── lambda_handler.py   # Lambda 핸들러
+│   ├── template.yaml       # SAM 템플릿
+│   └── test_real_article.py # 테스트 스크립트
+│
+└── package.json            # 루트 패키지 (프로젝트 전체 스크립트)
+```
+
+## 🌟 주요 기능
+
+- **AI 제목 생성**: Claude Sonnet 4를 활용한 10개 제목 자동 생성
+- **실시간 처리**: AWS Lambda를 통한 빠른 응답
+- **반응형 UI**: 모든 디바이스에서 최적화된 사용자 경험
+- **제목 복사**: 개별 제목 클립보드 복사 기능
+- **로딩 상태**: 생성 중 시각적 피드백
 
 ## 🛠️ 기술 스택
 
+### Frontend
 - **React 18**: 최신 React 훅과 기능 활용
-- **Vite**: 빠른 개발 서버와 빌드 도구
+- **Vite**: 빠른 개발 서버와 빌드 도구  
 - **Tailwind CSS**: 유틸리티 기반 CSS 프레임워크
 - **Lucide React**: 아이콘 라이브러리
-- **clsx**: 조건부 클래스 네임 유틸리티
+
+### Backend
+- **AWS Lambda**: 서버리스 컴퓨팅 (Python 3.11)
+- **AWS Bedrock**: Claude Sonnet 4 모델 호출
+- **AWS API Gateway**: RESTful API 엔드포인트
+- **AWS IAM**: 보안 및 권한 관리
 
 ## 📦 설치 및 실행
 
-### 1. 의존성 설치
+### 1. 프론트엔드 의존성 설치
 
 ```bash
-npm install
+npm run install:frontend
 ```
 
 ### 2. 개발 서버 실행
 
 ```bash
-npm run dev
+npm run dev  # 프론트엔드 개발 서버 (포트 3000)
 ```
 
-### 3. 빌드
+### 3. 백엔드 테스트
 
 ```bash
-npm run build
+npm run test:backend  # 로컬에서 Lambda 함수 테스트
 ```
 
-### 4. 프로덕션 미리보기
+### 4. 프론트엔드 빌드
 
 ```bash
-npm run preview
+npm run build:frontend
 ```
 
-## 📁 프로젝트 구조
+## ☁️ AWS 리소스 (nx-tt-dev-ver3 prefix)
 
-```
-src/
-├── components/
-│   ├── Sidebar.jsx          # 좌측 사이드바 (네비게이션, 대화목록)
-│   ├── MainContent.jsx      # 메인 콘텐츠 영역
-│   ├── ChatInput.jsx        # 채팅 입력 컴포넌트
-│   └── RightPanel.jsx       # 우측 패널 (파일, 지침)
-├── App.jsx                  # 메인 앱 컴포넌트
-├── main.jsx                 # React 진입점
-└── index.css               # 글로벌 스타일
+- **Lambda Function**: `nx-tt-dev-ver3-title-generation`
+- **API Gateway**: `nx-tt-dev-ver3-api`
+- **IAM Role**: `nx-tt-dev-ver3-lambda-role`
+- **IAM Policy**: `nx-tt-dev-ver3-bedrock-policy`
+- **API Endpoint**: `https://qyfams2iva.execute-api.us-east-1.amazonaws.com/prod/generate-titles`
+
+## ⚙️ 환경 설정
+
+### 프론트엔드 환경 변수 (frontend/.env.development)
+
+```env
+VITE_API_URL=https://qyfams2iva.execute-api.us-east-1.amazonaws.com/prod
+VITE_USE_MOCK=false  # true: Mock 데이터 사용, false: 실제 API 사용
 ```
 
 ## 🎨 주요 컴포넌트
