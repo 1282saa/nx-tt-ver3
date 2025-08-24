@@ -96,13 +96,15 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
       // 마크다운 렌더링 적용
       const textContent = typeof content === 'string' ? content : '';
       return (
-        <div className="chatbot-markdown prose prose-sm max-w-none">
+        <div className="chatbot-markdown prose prose-lg max-w-none" style={{
+          fontFamily: '"Times New Roman", Times, serif'
+        }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkEmoji]}
             rehypePlugins={[rehypeKatex]}
             components={{
               p: ({ children }) => (
-                <p className="mb-4 leading-relaxed">{children}</p>
+                <p className="mb-4 leading-relaxed" style={{ fontFamily: 'inherit' }}>{children}</p>
               ),
               h1: ({ children }) => (
                 <h1 className="text-2xl font-bold mb-4">{children}</h1>
@@ -119,7 +121,7 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
               ol: ({ children }) => (
                 <ol className="list-decimal pl-6 mb-4 space-y-2">{children}</ol>
               ),
-              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+              li: ({ children }) => <li className="leading-relaxed" style={{ fontFamily: 'inherit' }}>{children}</li>,
               blockquote: ({ children }) => (
                 <blockquote className="border-l-4 border-gray-300 pl-4 italic my-4">
                   {children}
@@ -199,10 +201,10 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
           data-testid="assistant-message"
           className="grid grid-cols-1 gap-2 py-0.5"
           style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "0.9375rem",
-            lineHeight: "1.5rem",
-            letterSpacing: "-0.025em",
+            fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+            fontSize: "1rem",
+            lineHeight: "1.75rem",
+            letterSpacing: "normal",
             color: "hsl(var(--text-100))",
           }}
         >

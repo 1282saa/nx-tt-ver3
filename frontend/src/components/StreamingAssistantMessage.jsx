@@ -32,10 +32,10 @@ const StreamingAssistantMessage = memo(({
     finish,
     reset
   } = useSmoothStreaming({
-    charDelay: 4,         // 기본 4ms/글자 (초당 약 250글자)
-    minDelay: 1,          // 최소 1ms (초고속)
-    maxDelay: 8,          // 최대 8ms (구두점도 빠르게)
-    smoothness: 0.98,     // 최대한 부드럽게
+    charDelay: 2,         // 기본 2ms/글자 (초당 약 500글자)
+    minDelay: 0.5,        // 최소 0.5ms (극한 속도)
+    maxDelay: 4,          // 최대 4ms (구두점도 더 빠르게)
+    smoothness: 0.99,     // 극도로 부드럽게
   });
 
   const lastContentRef = useRef('');
@@ -96,60 +96,59 @@ const StreamingAssistantMessage = memo(({
 
   return (
     <div className="mb-8 last:mb-0">
-      {/* 스트리밍 인디케이터 - 항상 공간 확보 */}
-      <div 
-        className="h-6 mb-2 px-4 overflow-hidden"
-        style={{
-          opacity: propIsStreaming && !displayText ? 1 : 0,
-          transition: 'opacity 0.3s ease-in-out'
-        }}
-      >
-        <div className="flex items-center gap-2">
+      {/* 스트리밍 인디케이터와 메시지를 같은 위치에 표시 */}
+      <div className="px-4">
+        <div className="flex items-start gap-3 pt-1">
           <motion.div
             animate={{ 
-              rotate: 360
+              rotate: propIsStreaming && !displayText ? 360 : 0
             }}
             transition={{ 
               duration: 1.5,
-              repeat: Infinity,
+              repeat: propIsStreaming && !displayText ? Infinity : 0,
               ease: "linear"
             }}
+            style={{
+              opacity: propIsStreaming && !displayText ? 1 : 0,
+              display: propIsStreaming && !displayText ? 'block' : 'none'
+            }}
           >
-            <Sparkles size={16} className="text-accent-main-100" />
+            <Sparkles size={18} className="text-accent-main-100 mt-0.5" />
           </motion.div>
-          <span className="text-xs text-text-300">답변 생성 중...</span>
-        </div>
-      </div>
-      
-      {/* 메시지 콘텐츠 */}
-      <div
-        className="mx-auto w-full p-4 rounded-2xl"
-        style={{
-          transform: "none",
-          backgroundColor: "hsl(var(--bg-100))",
-        }}
-      >
-        <div
-          data-testid="assistant-message"
-          className="grid grid-cols-1 gap-2 py-0.5"
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "0.9375rem",
-            lineHeight: "1.5rem",
-            letterSpacing: "-0.025em",
-            color: "hsl(var(--text-100))",
-          }}
-        >
+          
+          {/* 답변 생성 중 텍스트 또는 실제 답변 */}
+          {propIsStreaming && !displayText ? (
+            <span className="text-sm text-text-300">답변 생성 중...</span>
+          ) : (
+            <div
+              className="mx-auto w-full rounded-2xl flex-1"
+              style={{
+                transform: "none",
+                backgroundColor: "hsl(var(--bg-100))",
+              }}
+            >
+              <div
+                data-testid="assistant-message"
+                className="grid grid-cols-1 gap-2 py-0.5"
+                style={{
+                  fontFamily: '"Times New Roman", Times, serif',
+                  fontSize: "1rem",
+                  lineHeight: "1.75rem",
+                  letterSpacing: "normal",
+                  color: "hsl(var(--text-100))",
+                }}
+              >
           
           {/* 텍스트 콘텐츠 - 마크다운 적용 + 부드러운 출력 */}
           {(displayText || isStreaming) && (
             <div 
-              className="chatbot-markdown prose prose-sm max-w-none"
+              className="chatbot-markdown prose prose-lg max-w-none"
               style={{
                 opacity: displayText ? 1 : 0,
                 transform: displayText ? 'translateY(0)' : 'translateY(4px)',
                 transition: 'opacity 0.15s ease-out, transform 0.15s ease-out',
-                color: '#FAF9F5',
+                color: 'hsl(var(--text-100))',
+                fontFamily: '"Times New Roman", Times, serif',
               }}
             >
               <ReactMarkdown
@@ -157,7 +156,7 @@ const StreamingAssistantMessage = memo(({
                 rehypePlugins={[rehypeKatex]}
                 components={{
                   p: ({ children }) => (
-                    <p className="mb-4 leading-relaxed">{children}</p>
+                    <p className="mb-4 leading-relaxed" style={{ fontFamily: 'inherit' }}>{children}</p>
                   ),
                   h1: ({ children }) => (
                     <h1 className="text-2xl font-bold mb-4">{children}</h1>
@@ -174,7 +173,7 @@ const StreamingAssistantMessage = memo(({
                   ol: ({ children }) => (
                     <ol className="list-decimal pl-6 mb-4 space-y-2">{children}</ol>
                   ),
-                  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                  li: ({ children }) => <li className="leading-relaxed" style={{ fontFamily: 'inherit' }}>{children}</li>,
                   blockquote: ({ children }) => (
                     <blockquote className="border-l-4 border-gray-300 pl-4 italic my-4">
                       {children}
@@ -267,6 +266,9 @@ const StreamingAssistantMessage = memo(({
                   복사됨!
                 </span>
               )}
+            </div>
+          )}
+              </div>
             </div>
           )}
         </div>
