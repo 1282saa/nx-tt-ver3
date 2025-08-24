@@ -22,6 +22,7 @@ const MainContent = ({
   onBackToLanding,
   onToggleSidebar,
   isSidebarOpen = false,
+  onDashboard,
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -199,22 +200,22 @@ const MainContent = ({
         </div>
       )}
       
-      <Header onLogout={onLogout} onHome={onBackToLanding} onToggleSidebar={onToggleSidebar} isSidebarOpen={isSidebarOpen} />
+      <Header onLogout={onLogout} onHome={onBackToLanding} onToggleSidebar={onToggleSidebar} isSidebarOpen={isSidebarOpen} onDashboard={onDashboard} />
 
       {/* Main Grid */}
       <main
         className={clsx(
-          "mx-auto mt-4 w-full flex-1 lg:mt-6 flex flex-col gap-6",
+          "mx-auto mt-4 w-full flex-1 lg:mt-6 flex gap-6",
           userRole === "admin"
-            ? "max-w-7xl xl:flex-row px-6 lg:px-8"
-            : "max-w-none px-4 lg:px-6"
+            ? "max-w-7xl flex-col xl:flex-row px-6 lg:px-8"
+            : "max-w-none flex-col px-4 lg:px-6"
         )}
       >
         <div className="flex-1 flex flex-col gap-4">
           {/* Enhanced Chat Interface */}
           <div
             className={clsx(
-              "flex flex-col gap-6 max-md:pt-4 mt-6 w-full",
+              "flex flex-col gap-3 max-md:pt-4 mt-4 w-full",
               userRole === "admin"
                 ? "items-start max-w-none"
                 : "items-center max-w-4xl mx-auto"
@@ -325,16 +326,21 @@ const MainContent = ({
             )}
 
             {/* Enhanced Chat Input */}
-            <div className="top-5 z-10 w-full">
-              <div className="w-full">
-                <ChatInput
-                  ref={chatInputRef}
-                  onSendMessage={handleSendMessage}
-                  onStartChat={onStartChat}
-                  onTitlesGenerated={handleTitlesGenerated}
-                />
-              </div>
+            <div className="z-10 w-full">
+              <ChatInput
+                ref={chatInputRef}
+                onSendMessage={handleSendMessage}
+                onStartChat={onStartChat}
+                onTitlesGenerated={handleTitlesGenerated}
+              />
             </div>
+
+            {/* Prompt Manage Panel - 관리자만 보임, 모바일에서는 입력창 아래 */}
+            {userRole === "admin" && (
+              <div className="w-full xl:hidden">
+                <PromptManagePanel engineType={selectedEngine} />
+              </div>
+            )}
 
             {/* T5/H8 Guide Section - 사용자만 표시 */}
             {userRole === "user" && (
@@ -343,8 +349,12 @@ const MainContent = ({
           </div>
         </div>
 
-        {/* Prompt Manage Panel - 관리자만 보임 */}
-        {userRole === "admin" && <PromptManagePanel engineType={selectedEngine} />}
+        {/* Prompt Manage Panel - 관리자만 보임, 데스크톱에서는 오른쪽 */}
+        {userRole === "admin" && (
+          <div className="hidden xl:block">
+            <PromptManagePanel engineType={selectedEngine} />
+          </div>
+        )}
       </main>
 
       {/* Edit Project Modal */}

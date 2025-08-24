@@ -316,8 +316,7 @@ def stream_claude_response_inline(user_message, system_prompt, conversation_hist
             "max_tokens": 8192,
             "temperature": 0.2,
             "system": system_prompt,
-            "messages": messages,
-            "stream": True
+            "messages": messages
         }
         
         logger.info(f"Calling Claude with {len(messages)} messages")

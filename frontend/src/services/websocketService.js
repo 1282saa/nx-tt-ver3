@@ -23,10 +23,20 @@ class WebSocketService {
 
     this.isConnecting = true;
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       try {
-        const wsUrl = 'wss://hsdpbajz23.execute-api.us-east-1.amazonaws.com/prod';
-        console.log('🔌 WebSocket 연결 시도:', wsUrl);
+        // JWT 토큰 가져오기
+        const authService = (await import('./authService')).default;
+        const token = await authService.getAuthToken();
+        
+        let wsUrl = 'wss://hsdpbajz23.execute-api.us-east-1.amazonaws.com/prod';
+        
+        // 토큰이 있으면 쿼리 파라미터로 추가
+        if (token) {
+          wsUrl += `?token=${encodeURIComponent(token)}`;
+        }
+        
+        console.log('🔌 WebSocket 연결 시도:', wsUrl.split('?')[0]); // URL만 로그 (토큰 제외)
         
         this.ws = new WebSocket(wsUrl);
 
@@ -171,6 +181,10 @@ class WebSocketService {
       }
 
       try {
+        // 사용자 정보 가져오기
+        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        const userId = userInfo.userId || userInfo.username || 'anonymous';
+        
         // 대화 기록 처리
         const processedHistory = this.conversationHistory.map(msg => {
           const content = typeof msg.content === 'object' && msg.content.text 
@@ -197,6 +211,7 @@ class WebSocketService {
               message: chunk,
               engineType: engineType,
               conversationId: conversationId,
+              userId: userId,
               timestamp: new Date().toISOString(),
               conversationHistory: index === 0 ? processedHistory : [], // 첫 청크에만 히스토리 포함
               chunkInfo: {
@@ -217,6 +232,7 @@ class WebSocketService {
             message: message,
             engineType: engineType,
             conversationId: conversationId,
+            userId: userId,
             timestamp: new Date().toISOString(),
             conversationHistory: processedHistory
           };

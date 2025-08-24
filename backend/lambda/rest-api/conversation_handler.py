@@ -2,17 +2,25 @@ import json
 import boto3
 from datetime import datetime
 import uuid
+from decimal import Decimal
 
 # DynamoDB 설정
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 conversations_table = dynamodb.Table('nx-tt-dev-ver3-conversations')
 
-# CORS 헤더 설정
-def get_cors_headers():
+# Decimal 타입을 JSON 직렬화 가능한 타입으로 변환
+def decimal_to_float(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: decimal_to_float(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [decimal_to_float(item) for item in obj]
+    return obj
+
+# 응답 헤더 설정 (Lambda Function URL이 CORS를 자동 처리하므로 중복 제거)
+def get_response_headers():
     return {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
         'Content-Type': 'application/json'
     }
 
@@ -32,12 +40,12 @@ def lambda_handler(event, context):
         method = event.get('httpMethod', 'GET')
         path = event.get('path', '')
     
-    # OPTIONS 요청 처리 (CORS preflight)
+    # OPTIONS 요청 처리 (Lambda Function URL이 자동 처리하므로 간단히)
     if method == 'OPTIONS':
         return {
             'statusCode': 200,
-            'headers': get_cors_headers(),
-            'body': json.dumps({'message': 'CORS preflight OK'})
+            'headers': get_response_headers(),
+            'body': json.dumps({'message': 'OK'})
         }
     
     try:
@@ -50,7 +58,7 @@ def lambda_handler(event, context):
             if not body.get('messages'):
                 return {
                     'statusCode': 400,
-                    'headers': get_cors_headers(),
+                    'headers': get_response_headers(),
                     'body': json.dumps({'error': 'messages field is required'})
                 }
             
@@ -72,7 +80,7 @@ def lambda_handler(event, context):
             
             return {
                 'statusCode': 200,
-                'headers': get_cors_headers(),
+                'headers': get_response_headers(),
                 'body': json.dumps({
                     'conversationId': conversation_id,
                     'message': 'Conversation saved successfully'
@@ -90,14 +98,14 @@ def lambda_handler(event, context):
             if 'Item' not in response:
                 return {
                     'statusCode': 404,
-                    'headers': get_cors_headers(),
+                    'headers': get_response_headers(),
                     'body': json.dumps({'error': 'Conversation not found'})
                 }
             
             return {
                 'statusCode': 200,
-                'headers': get_cors_headers(),
-                'body': json.dumps(response['Item'])
+                'headers': get_response_headers(),
+                'body': json.dumps(decimal_to_float(response['Item']))
             }
         
         # GET / 또는 /conversations - 모든 대화 목록 조회
@@ -113,9 +121,9 @@ def lambda_handler(event, context):
             
             return {
                 'statusCode': 200,
-                'headers': get_cors_headers(),
+                'headers': get_response_headers(),
                 'body': json.dumps({
-                    'conversations': conversations,
+                    'conversations': decimal_to_float(conversations),
                     'count': len(conversations)
                 })
             }
@@ -130,7 +138,7 @@ def lambda_handler(event, context):
             
             return {
                 'statusCode': 200,
-                'headers': get_cors_headers(),
+                'headers': get_response_headers(),
                 'body': json.dumps({
                     'message': 'Conversation deleted successfully'
                 })
@@ -139,7 +147,7 @@ def lambda_handler(event, context):
         else:
             return {
                 'statusCode': 404,
-                'headers': get_cors_headers(),
+                'headers': get_response_headers(),
                 'body': json.dumps({'error': 'Not Found'})
             }
             
@@ -147,6 +155,6 @@ def lambda_handler(event, context):
         print(f"Error: {str(e)}")
         return {
             'statusCode': 500,
-            'headers': get_cors_headers(),
+            'headers': get_response_headers(),
             'body': json.dumps({'error': str(e)})
         }

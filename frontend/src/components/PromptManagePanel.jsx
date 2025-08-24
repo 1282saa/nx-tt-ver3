@@ -118,7 +118,7 @@ const PromptManagePanel = ({ engineType = 'T5' }) => {
       <div className="relative">
         <div className="claude-border transition-all duration-300 ease-out flex flex-col">
           {/* Instructions Section */}
-          <div
+          <div 
             className="w-full px-[1.375rem] py-4 border-b-[0.5px] flex flex-row items-center justify-between gap-4 mt-1"
             style={{ borderColor: "hsl(var(--border-300)/0.15)" }}
           >

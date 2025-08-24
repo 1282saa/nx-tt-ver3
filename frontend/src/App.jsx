@@ -7,6 +7,8 @@ import LoginPage from "./components/LoginPage";
 import SignUpPage from "./components/SignUpPage";
 import LandingPage from "./components/LandingPage";
 import Sidebar from "./components/Sidebar";
+import Dashboard from "./components/Dashboard";
+import ProtectedRoute from "./components/ProtectedRoute";
 import { PageTransition } from "./components/PageTransition";
 import { AnimatePresence } from 'framer-motion';
 
@@ -77,12 +79,29 @@ function AppContent() {
     setChatMessage("");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Cognito 로그아웃
+      const authService = (await import('./services/authService')).default;
+      await authService.signOut();
+    } catch (error) {
+      console.error('로그아웃 오류:', error);
+    }
+    
+    // 로컬 상태 및 스토리지 초기화
     setIsLoggedIn(false);
     setUserRole("user");
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userRole');
     localStorage.removeItem('selectedEngine');
+    localStorage.removeItem('userInfo');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('idToken');
+    localStorage.removeItem('refreshToken');
+    
+    // Header에 사용자 정보 업데이트 알림
+    window.dispatchEvent(new CustomEvent('userInfoUpdated'));
+    
     navigate("/");
   };
 
@@ -140,6 +159,16 @@ function AppContent() {
     if (sidebarRef.current && sidebarRef.current.loadConversations) {
       sidebarRef.current.loadConversations();
     }
+  };
+
+  const handleDashboard = (engine) => {
+    const enginePath = engine ? engine.toLowerCase() : selectedEngine.toLowerCase();
+    navigate(`/${enginePath}/dashboard`);
+  };
+
+  const handleBackFromDashboard = (engine) => {
+    const enginePath = engine ? engine.toLowerCase() : selectedEngine.toLowerCase();
+    navigate(`/${enginePath}/chat`);
   };
 
   // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입 제외)
@@ -210,73 +239,111 @@ function AppContent() {
             <Route 
               path="/t5/chat/:conversationId?" 
               element={
-                <PageTransition pageKey="chat-t5">
-                  <ChatPage
-                    initialMessage={location.state?.initialMessage || chatMessage}
-                    userRole={userRole}
-                    selectedEngine="T5"
-                    onLogout={handleLogout}
-                    onBackToLanding={handleBackToLanding}
-                    onTitleUpdate={handleTitleUpdate}
-                    onToggleSidebar={toggleSidebar}
-                    isSidebarOpen={isSidebarOpen}
-                    onNewConversation={handleNewConversation}
-                  />
-                </PageTransition>
+                <ProtectedRoute>
+                  <PageTransition pageKey="chat-t5">
+                    <ChatPage
+                      initialMessage={location.state?.initialMessage || chatMessage}
+                      userRole={userRole}
+                      selectedEngine="T5"
+                      onLogout={handleLogout}
+                      onBackToLanding={handleBackToLanding}
+                      onTitleUpdate={handleTitleUpdate}
+                      onToggleSidebar={toggleSidebar}
+                      isSidebarOpen={isSidebarOpen}
+                      onNewConversation={handleNewConversation}
+                      onDashboard={() => handleDashboard("T5")}
+                    />
+                  </PageTransition>
+                </ProtectedRoute>
               } 
             />
             <Route 
               path="/h8/chat/:conversationId?" 
               element={
-                <PageTransition pageKey="chat-h8">
-                  <ChatPage
-                    initialMessage={location.state?.initialMessage || chatMessage}
-                    userRole={userRole}
-                    selectedEngine="H8"
-                    onLogout={handleLogout}
-                    onBackToLanding={handleBackToLanding}
-                    onTitleUpdate={handleTitleUpdate}
-                    onToggleSidebar={toggleSidebar}
-                    isSidebarOpen={isSidebarOpen}
-                    onNewConversation={handleNewConversation}
-                  />
-                </PageTransition>
+                <ProtectedRoute>
+                  <PageTransition pageKey="chat-h8">
+                    <ChatPage
+                      initialMessage={location.state?.initialMessage || chatMessage}
+                      userRole={userRole}
+                      selectedEngine="H8"
+                      onLogout={handleLogout}
+                      onBackToLanding={handleBackToLanding}
+                      onTitleUpdate={handleTitleUpdate}
+                      onToggleSidebar={toggleSidebar}
+                      isSidebarOpen={isSidebarOpen}
+                      onNewConversation={handleNewConversation}
+                      onDashboard={() => handleDashboard("H8")}
+                    />
+                  </PageTransition>
+                </ProtectedRoute>
               } 
             />
             <Route 
               path="/t5" 
               element={
-                <PageTransition pageKey="main-t5">
-                  <MainContent
-                    project={currentProject}
-                    userRole={userRole}
-                    selectedEngine="T5"
-                    onToggleStar={toggleStar}
-                    onStartChat={handleStartChat}
-                    onLogout={handleLogout}
-                    onBackToLanding={handleBackToLanding}
-                    onToggleSidebar={toggleSidebar}
-                    isSidebarOpen={isSidebarOpen}
-                  />
-                </PageTransition>
+                <ProtectedRoute>
+                  <PageTransition pageKey="main-t5">
+                    <MainContent
+                      project={currentProject}
+                      userRole={userRole}
+                      selectedEngine="T5"
+                      onToggleStar={toggleStar}
+                      onStartChat={handleStartChat}
+                      onLogout={handleLogout}
+                      onBackToLanding={handleBackToLanding}
+                      onToggleSidebar={toggleSidebar}
+                      isSidebarOpen={isSidebarOpen}
+                      onDashboard={() => handleDashboard("T5")}
+                    />
+                  </PageTransition>
+                </ProtectedRoute>
               } 
             />
             <Route 
               path="/h8" 
               element={
-                <PageTransition pageKey="main-h8">
-                  <MainContent
-                    project={currentProject}
-                    userRole={userRole}
-                    selectedEngine="H8"
-                    onToggleStar={toggleStar}
-                    onStartChat={handleStartChat}
-                    onLogout={handleLogout}
-                    onBackToLanding={handleBackToLanding}
-                    onToggleSidebar={toggleSidebar}
-                    isSidebarOpen={isSidebarOpen}
-                  />
-                </PageTransition>
+                <ProtectedRoute>
+                  <PageTransition pageKey="main-h8">
+                    <MainContent
+                      project={currentProject}
+                      userRole={userRole}
+                      selectedEngine="H8"
+                      onToggleStar={toggleStar}
+                      onStartChat={handleStartChat}
+                      onLogout={handleLogout}
+                      onBackToLanding={handleBackToLanding}
+                      onToggleSidebar={toggleSidebar}
+                      isSidebarOpen={isSidebarOpen}
+                      onDashboard={() => handleDashboard("H8")}
+                    />
+                  </PageTransition>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/t5/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <PageTransition pageKey="dashboard-t5">
+                    <Dashboard
+                      selectedEngine="T5"
+                      onBack={() => handleBackFromDashboard("T5")}
+                    />
+                  </PageTransition>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/h8/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <PageTransition pageKey="dashboard-h8">
+                    <Dashboard
+                      selectedEngine="H8"
+                      onBack={() => handleBackFromDashboard("H8")}
+                    />
+                  </PageTransition>
+                </ProtectedRoute>
               } 
             />
             {/* 기본 리다이렉트 */}

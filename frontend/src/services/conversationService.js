@@ -1,20 +1,31 @@
 // 대화 저장 및 관리 서비스
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://2zzb4h3d3gnua4v47zsoboa3ya0fwrnz.lambda-url.us-east-1.on.aws';
+// API Gateway 엔드포인트가 설정될 때까지 localStorage만 사용
+const API_BASE_URL = null; // 서버 연동 비활성화
 
 class ConversationService {
   constructor() {
     this.userId = this.getUserId();
   }
 
-  // 사용자 ID 가져오기 (로그인 시스템이 없으므로 임시로 localStorage 사용)
+  // 사용자 ID 가져오기 (인증된 사용자 정보 사용)
   getUserId() {
-    let userId = localStorage.getItem('userId');
-    if (!userId) {
-      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('userId', userId);
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    return userInfo.userId || userInfo.username || 'anonymous';
+  }
+
+  // 인증 헤더 생성
+  getAuthHeaders() {
+    const token = localStorage.getItem('authToken');
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-    return userId;
+    
+    return headers;
   }
 
   // 대화 저장
@@ -22,9 +33,7 @@ class ConversationService {
     try {
       const response = await fetch(`${API_BASE_URL}/conversations`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify({
           userId: this.userId,
           ...conversationData
@@ -59,9 +68,7 @@ class ConversationService {
 
       const response = await fetch(`${API_BASE_URL}/conversations?${params}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: this.getAuthHeaders()
       });
 
       if (!response.ok) {
@@ -87,9 +94,7 @@ class ConversationService {
 
       const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}?${params}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: this.getAuthHeaders()
       });
 
       if (!response.ok) {
@@ -115,9 +120,7 @@ class ConversationService {
 
       const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}?${params}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: this.getAuthHeaders()
       });
 
       if (!response.ok) {
@@ -163,11 +166,10 @@ class ConversationService {
       clearTimeout(this.saveTimer);
     }
 
-    // 3초 후에 저장
+    // 3초 후에 저장 (localStorage만 사용)
     this.saveTimer = setTimeout(() => {
-      this.saveConversation(conversationData).catch(error => {
-        console.error('자동 저장 실패:', error);
-      });
+      // API 호출 대신 localStorage에만 저장
+      this.saveToLocalStorage(conversationData);
     }, 3000);
   }
 
@@ -175,15 +177,36 @@ class ConversationService {
 
   saveToLocalStorage(conversationData) {
     try {
-      const key = `conversation_${conversationData.engineType}_${conversationData.conversationId || Date.now()}`;
       const conversations = JSON.parse(localStorage.getItem('conversations') || '{}');
-      conversations[key] = {
-        ...conversationData,
-        userId: this.userId,
-        updatedAt: new Date().toISOString()
-      };
+      const conversationId = conversationData.conversationId || crypto.randomUUID();
+      const key = `conversation_${conversationData.engineType}_${conversationId}`;
+      
+      // 이미 존재하는 대화인지 확인
+      const existingKey = Object.keys(conversations).find(
+        k => conversations[k].conversationId === conversationId
+      );
+      
+      if (existingKey) {
+        // 기존 대화 업데이트 (중복 방지)
+        conversations[existingKey] = {
+          ...conversations[existingKey],
+          ...conversationData,
+          userId: this.userId,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        // 새로운 대화 생성
+        conversations[key] = {
+          ...conversationData,
+          conversationId,
+          userId: this.userId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
       localStorage.setItem('conversations', JSON.stringify(conversations));
-      console.log('💾 localStorage에 백업 저장');
+      console.log('💾 localStorage에 저장:', existingKey ? '업데이트' : '신규');
     } catch (error) {
       console.error('localStorage 저장 실패:', error);
     }

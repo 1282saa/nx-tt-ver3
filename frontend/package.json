@@ -11,6 +11,10 @@
     "serve": "serve -s dist"
   },
   "dependencies": {
+    "@aws-amplify/auth": "^6.15.0",
+    "@aws-amplify/core": "^6.13.1",
+    "@aws-sdk/client-cognito-identity-provider": "^3.873.0",
+    "@aws-sdk/credential-providers": "^3.873.0",
     "@heroicons/react": "^2.2.0",
     "clsx": "^1.2.1",
     "framer-motion": "^12.23.12",

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test - Virginia</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #messages { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 10px; margin: 20px 0; }
+        .user { color: blue; margin: 5px 0; }
+        .assistant { color: green; margin: 5px 0; }
+        .system { color: gray; font-style: italic; margin: 5px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+        input { width: 500px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket 테스트 - Virginia Region</h1>
+    <div>
+        <input type="text" id="messageInput" placeholder="메시지를 입력하세요..." value="안녕하세요! 오늘 날씨가 어떤가요?">
+        <button onclick="sendMessage()">전송</button>
+        <button onclick="testMemory()">대화 기억 테스트</button>
+    </div>
+    <div id="messages"></div>
+
+    <script>
+        const wsUrl = 'wss://hsdpbajz23.execute-api.us-east-1.amazonaws.com/production';
+        let ws = null;
+        let conversationId = `test-${Date.now()}`;
+        let conversationHistory = [];
+
+        function connect() {
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                log('✅ WebSocket 연결 성공 (Virginia)', 'system');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data);
+                
+                if (data.type === 'ai_chunk') {
+                    appendToLastAssistant(data.chunk);
+                } else if (data.type === 'chat_end') {
+                    log(`\n✅ 응답 완료 (${data.total_chunks} chunks)`, 'system');
+                    if (data.conversationId) {
+                        conversationId = data.conversationId;
+                        log(`📝 Conversation ID: ${conversationId}`, 'system');
+                    }
+                }
+            };
+            
+            ws.onerror = (error) => {
+                log(`❌ 에러: ${error}`, 'system');
+            };
+            
+            ws.onclose = () => {
+                log('🔌 연결 종료', 'system');
+            };
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value;
+            
+            if (!message) return;
+            
+            log(`User: ${message}`, 'user');
+            
+            // 대화 히스토리에 추가
+            conversationHistory.push({role: 'user', content: message});
+            
+            const payload = {
+                action: 'sendMessage',
+                message: message,
+                engineType: 'T5',
+                conversationId: conversationId,
+                conversationHistory: conversationHistory.slice(-10) // 최근 10개만
+            };
+            
+            ws.send(JSON.stringify(payload));
+            input.value = '';
+            
+            // AI 응답 준비
+            log('AI: ', 'assistant');
+        }
+        
+        function testMemory() {
+            // 첫 번째 메시지
+            const msg1 = "안녕하세요! 저는 테스트 사용자입니다.";
+            log(`User: ${msg1}`, 'user');
+            conversationHistory.push({role: 'user', content: msg1});
+            
+            ws.send(JSON.stringify({
+                action: 'sendMessage',
+                message: msg1,
+                engineType: 'T5',
+                conversationId: conversationId,
+                conversationHistory: []
+            }));
+            
+            // AI 응답 준비
+            log('AI: ', 'assistant');
+            
+            // 3초 후 두 번째 메시지
+            setTimeout(() => {
+                const msg2 = "제가 누구라고 했죠?";
+                log(`User: ${msg2}`, 'user');
+                
+                ws.send(JSON.stringify({
+                    action: 'sendMessage',
+                    message: msg2,
+                    engineType: 'T5',
+                    conversationId: conversationId,
+                    conversationHistory: conversationHistory
+                }));
+                
+                log('AI: ', 'assistant');
+            }, 5000);
+        }
+        
+        function log(message, className) {
+            const messagesDiv = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = message;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function appendToLastAssistant(text) {
+            const messagesDiv = document.getElementById('messages');
+            const lastDiv = messagesDiv.lastElementChild;
+            if (lastDiv && lastDiv.className === 'assistant') {
+                lastDiv.textContent += text;
+            }
+        }
+        
+        // 자동 연결
+        connect();
+    </script>
+</body>
+</html>

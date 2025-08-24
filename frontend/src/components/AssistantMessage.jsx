@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -8,7 +8,7 @@ import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, ThumbsUp, ThumbsDown, Check } from "lucide-react";
-import '../styles/markdown.css';
+import "../styles/markdown.css";
 
 const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
   const [copiedIndex, setCopiedIndex] = React.useState(null);
@@ -24,24 +24,29 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
   // 전체 메시지 복사
   const handleCopyMessage = async () => {
     try {
-      const textContent = typeof content === 'string' ? content : 
-                         content?.titles ? content.titles.join('\n') : '';
+      const textContent =
+        typeof content === "string"
+          ? content
+          : content?.titles
+          ? content.titles.join("\n")
+          : "";
       await navigator.clipboard.writeText(textContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('복사 실패:', err);
+      console.error("복사 실패:", err);
     }
   };
 
   // 피드백 기능
   const handleFeedback = (type) => {
     setFeedback(type === feedback ? null : type);
-    console.log('Feedback:', type, 'for message:', messageId);
+    console.log("Feedback:", type, "for message:", messageId);
   };
 
   // Check if content contains titles array
-  const hasValidTitles = content && typeof content === 'object' && Array.isArray(content.titles);
+  const hasValidTitles =
+    content && typeof content === "object" && Array.isArray(content.titles);
 
   // Format message content for display
   const formatContent = () => {
@@ -84,27 +89,35 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
           </div>
         </>
       );
-    } else if (content && typeof content === 'object' && content.isError) {
+    } else if (content && typeof content === "object" && content.isError) {
       return (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="text-red-800 whitespace-normal break-words">
-            {content.content || content.message || '오류가 발생했습니다'}
+            {content.content || content.message || "오류가 발생했습니다"}
           </div>
         </div>
       );
     } else {
       // 마크다운 렌더링 적용
-      const textContent = typeof content === 'string' ? content : '';
+      const textContent = typeof content === "string" ? content : "";
       return (
-        <div className="chatbot-markdown prose prose-lg max-w-none" style={{
-          fontFamily: '"Times New Roman", Times, serif'
-        }}>
+        <div
+          className="chatbot-markdown prose prose-lg max-w-none"
+          style={{
+            fontFamily: '"Times New Roman", Times, serif',
+          }}
+        >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkEmoji]}
             rehypePlugins={[rehypeKatex]}
             components={{
               p: ({ children }) => (
-                <p className="mb-4 leading-relaxed" style={{ fontFamily: 'inherit' }}>{children}</p>
+                <p
+                  className="mb-4 leading-relaxed"
+                  style={{ fontFamily: "inherit" }}
+                >
+                  {children}
+                </p>
               ),
               h1: ({ children }) => (
                 <h1 className="text-2xl font-bold mb-4">{children}</h1>
@@ -121,7 +134,14 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
               ol: ({ children }) => (
                 <ol className="list-decimal pl-6 mb-4 space-y-2">{children}</ol>
               ),
-              li: ({ children }) => <li className="leading-relaxed" style={{ fontFamily: 'inherit' }}>{children}</li>,
+              li: ({ children }) => (
+                <li
+                  className="leading-relaxed"
+                  style={{ fontFamily: "inherit" }}
+                >
+                  {children}
+                </li>
+              ),
               blockquote: ({ children }) => (
                 <blockquote className="border-l-4 border-gray-300 pl-4 italic my-4">
                   {children}
@@ -163,10 +183,14 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
                 <tr className="border-b border-gray-300">{children}</tr>
               ),
               th: ({ children }) => (
-                <th className="px-4 py-2 text-left font-semibold">{children}</th>
+                <th className="px-4 py-2 text-left font-semibold">
+                  {children}
+                </th>
               ),
               td: ({ children }) => (
-                <td className="px-4 py-2 border-l border-gray-300">{children}</td>
+                <td className="px-4 py-2 border-l border-gray-300">
+                  {children}
+                </td>
               ),
               a: ({ children, href }) => (
                 <a
@@ -201,7 +225,8 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
           data-testid="assistant-message"
           className="grid grid-cols-1 gap-2 py-0.5"
           style={{
-            fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+            fontFamily:
+              'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
             fontSize: "1rem",
             lineHeight: "1.75rem",
             letterSpacing: "normal",
@@ -210,7 +235,7 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
         >
           {formatContent()}
         </div>
-        
+
         {/* 액션 버튼들 */}
         <div className="flex items-center gap-2 mt-3">
           {/* 복사 버튼 */}
@@ -225,38 +250,42 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
               <Copy size={16} />
             )}
           </button>
-          
+
           {/* 좋아요 버튼 */}
           <button
-            onClick={() => handleFeedback('like')}
+            onClick={() => handleFeedback("like")}
             className={`p-1.5 rounded-lg transition-all duration-200 ${
-              feedback === 'like' 
-                ? 'text-accent-main-100 bg-accent-main-100/10' 
-                : 'text-text-400 hover:text-text-100 hover:bg-bg-200'
+              feedback === "like"
+                ? "text-accent-main-100 bg-accent-main-100/10"
+                : "text-text-400 hover:text-text-100 hover:bg-bg-200"
             }`}
             title="좋아요"
           >
-            <ThumbsUp size={16} fill={feedback === 'like' ? 'currentColor' : 'none'} />
+            <ThumbsUp
+              size={16}
+              fill={feedback === "like" ? "currentColor" : "none"}
+            />
           </button>
-          
+
           {/* 싫어요 버튼 */}
           <button
-            onClick={() => handleFeedback('dislike')}
+            onClick={() => handleFeedback("dislike")}
             className={`p-1.5 rounded-lg transition-all duration-200 ${
-              feedback === 'dislike' 
-                ? 'text-red-400 bg-red-400/10' 
-                : 'text-text-400 hover:text-text-100 hover:bg-bg-200'
+              feedback === "dislike"
+                ? "text-red-400 bg-red-400/10"
+                : "text-text-400 hover:text-text-100 hover:bg-bg-200"
             }`}
             title="싫어요"
           >
-            <ThumbsDown size={16} fill={feedback === 'dislike' ? 'currentColor' : 'none'} />
+            <ThumbsDown
+              size={16}
+              fill={feedback === "dislike" ? "currentColor" : "none"}
+            />
           </button>
-          
+
           {/* 복사 완료 메시지 */}
           {copied && (
-            <span className="text-xs text-green-400 ml-2">
-              복사됨!
-            </span>
+            <span className="text-xs text-green-400 ml-2">복사됨!</span>
           )}
         </div>
       </div>
@@ -264,6 +293,6 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
   );
 });
 
-AssistantMessage.displayName = 'AssistantMessage';
+AssistantMessage.displayName = "AssistantMessage";
 
 export default AssistantMessage;
