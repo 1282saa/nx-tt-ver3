@@ -171,11 +171,11 @@ class WebSocketService {
   }
 
   // 메시지 전송 (청크 지원)
-  sendMessage(message, engineType = 'T5', conversationId = null) {
+  sendMessage(message, engineType = 'T5', conversationId = null, conversationHistory = null, idempotencyKey = null) {
     return new Promise((resolve, reject) => {
       if (!this.isWebSocketConnected()) {
         console.error('WebSocket이 연결되지 않았습니다.');
-        this.messageQueue.push({ message, engineType, conversationId, resolve, reject });
+        this.messageQueue.push({ message, engineType, conversationId, conversationHistory, idempotencyKey, resolve, reject });
         this.connect();
         return;
       }
@@ -183,10 +183,21 @@ class WebSocketService {
       try {
         // 사용자 정보 가져오기
         const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
-        const userId = userInfo.userId || userInfo.username || 'anonymous';
+        // userId를 우선 사용하되, 없으면 email 또는 username 사용
+        const userId = userInfo.userId || userInfo.email || userInfo.username || 'anonymous';
         
-        // 대화 기록 처리
-        const processedHistory = this.conversationHistory.map(msg => {
+        // idempotencyKey가 없으면 생성
+        const messageIdempotencyKey = idempotencyKey || crypto.randomUUID();
+        
+        // 대화 기록 처리 - 전달받은 히스토리를 우선 사용
+        const historyToUse = conversationHistory || this.conversationHistory;
+        console.log('🧠 대화 히스토리 처리:', {
+          receivedHistory: conversationHistory ? conversationHistory.length : 0,
+          internalHistory: this.conversationHistory.length,
+          usingWhich: conversationHistory ? 'received' : 'internal'
+        });
+        
+        const processedHistory = historyToUse.map(msg => {
           const content = typeof msg.content === 'object' && msg.content.text 
             ? msg.content.text 
             : (typeof msg.content === 'string' ? msg.content : '');
@@ -212,6 +223,7 @@ class WebSocketService {
               engineType: engineType,
               conversationId: conversationId,
               userId: userId,
+              idempotencyKey: messageIdempotencyKey,
               timestamp: new Date().toISOString(),
               conversationHistory: index === 0 ? processedHistory : [], // 첫 청크에만 히스토리 포함
               chunkInfo: {
@@ -233,6 +245,7 @@ class WebSocketService {
             engineType: engineType,
             conversationId: conversationId,
             userId: userId,
+            idempotencyKey: messageIdempotencyKey,
             timestamp: new Date().toISOString(),
             conversationHistory: processedHistory
           };
@@ -240,7 +253,12 @@ class WebSocketService {
           console.log('📤 WebSocket 메시지 전송:', {
             messageLength: message.length,
             engineType,
-            conversationId: conversationId || 'new_conversation'
+            conversationId: conversationId || 'new_conversation',
+            historyLength: processedHistory.length,
+            history: processedHistory.slice(-3).map(h => ({
+              role: h.role,
+              preview: h.content.substring(0, 50) + '...'
+            }))
           });
           
           this.ws.send(JSON.stringify(payload));
@@ -349,8 +367,8 @@ const webSocketService = new WebSocketService();
 // 내보낼 함수들
 export const connectWebSocket = () => webSocketService.connect();
 export const disconnectWebSocket = () => webSocketService.disconnect();
-export const sendChatMessage = (message, engineType, conversationId) => 
-  webSocketService.sendMessage(message, engineType, conversationId);
+export const sendChatMessage = (message, engineType, conversationHistory, conversationId, idempotencyKey) => 
+  webSocketService.sendMessage(message, engineType, conversationId, conversationHistory, idempotencyKey);
 export const isWebSocketConnected = () => webSocketService.isWebSocketConnected();
 export const addMessageHandler = (handler) => webSocketService.addMessageHandler(handler);
 export const removeMessageHandler = (handler) => webSocketService.removeMessageHandler(handler);

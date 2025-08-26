@@ -101,7 +101,7 @@ def get_or_create_usage(user_id, engine_type):
             'totalTokens': Decimal('0'),
             'inputTokens': Decimal('0'),
             'outputTokens': Decimal('0'),
-            'messageCount': Decimal('0'),
+            'messageCount': Decimal('0'),ad
             'createdAt': datetime.now(timezone.utc).isoformat(),
             'updatedAt': datetime.now(timezone.utc).isoformat()
         }

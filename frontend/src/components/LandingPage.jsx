@@ -3,16 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { Zap, Sparkles } from "lucide-react";
 import Header from "./Header";
 
-const LandingPage = ({ onSelectEngine, onLogin }) => {
+const LandingPage = ({ onSelectEngine, onLogin, onLogout }) => {
   const navigate = useNavigate();
-  
+
   const handleEngineSelect = (engine) => {
     onSelectEngine(engine);
   };
 
   const handleLogout = () => {
-    // 랜딩페이지에서는 로그아웃 시 새로고침
-    window.location.reload();
+    // App.jsx의 handleLogout 호출
+    if (onLogout) {
+      onLogout();
+    } else {
+      // fallback: onLogout이 없으면 새로고침
+      window.location.reload();
+    }
   };
 
   return (
@@ -51,7 +56,7 @@ const LandingPage = ({ onSelectEngine, onLogin }) => {
                 </span>
               </h1>
               <p className="app-subtitle text-xl text-text-300">
-                AI 기반 기사 제목 생성 시스템
+                서울경제신문 AI 제목 생성 시스템
               </p>
             </div>
 
@@ -59,7 +64,7 @@ const LandingPage = ({ onSelectEngine, onLogin }) => {
             <div className="main-content">
               <div className="product-selection">
                 <h2 className="selection-title text-2xl font-semibold text-center mb-8 text-text-100">
-                  🎯 제목 생성 엔진을 선택하세요
+                  독자와의 첫 만남, 제목을 추천해 드립니다
                 </h2>
 
                 <div className="product-cards grid md:grid-cols-2 gap-8 mb-8">
@@ -83,7 +88,7 @@ const LandingPage = ({ onSelectEngine, onLogin }) => {
                           color: "hsl(var(--accent-main-000))",
                         }}
                       >
-                        빠른 생성
+                        핵심을 꿰뚫는 타이틀
                       </div>
                     </div>
 
@@ -155,7 +160,7 @@ const LandingPage = ({ onSelectEngine, onLogin }) => {
                           color: "hsl(var(--accent-secondary-000))",
                         }}
                       >
-                        완벽한 품질
+                        사방팔방 둘러보는 헤드라인
                       </div>
                     </div>
 

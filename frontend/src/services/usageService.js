@@ -185,8 +185,26 @@ const initializeUsageData = () => {
 // 로컬 사용량 데이터 가져오기
 export const getLocalUsageData = () => {
   try {
+    // 먼저 백업 데이터 확인 (실제 사용량)
+    const backup = localStorage.getItem(USAGE_KEY + '_backup');
+    if (backup) {
+      try {
+        const backupData = JSON.parse(backup);
+        // 백업 데이터가 있으면 우선 사용
+        return backupData;
+      } catch (e) {
+        console.log('백업 데이터 파싱 실패');
+      }
+    }
+    
     const stored = localStorage.getItem(USAGE_KEY);
     if (!stored) {
+      // 초기화하되, 기존 백업 데이터가 있는지 한 번 더 확인
+      const existingBackup = localStorage.getItem(USAGE_KEY + '_backup');
+      if (existingBackup) {
+        return JSON.parse(existingBackup);
+      }
+      
       const initialData = initializeUsageData();
       localStorage.setItem(USAGE_KEY, JSON.stringify(initialData));
       return initialData;
@@ -305,13 +323,39 @@ export const updateLocalUsage = async (engineType, inputText, outputText) => {
       // 로컬 백업용으로 저장 (오프라인 대비)
       const backupData = getLocalUsageData();
       if (result.usage) {
-        backupData[engineType] = result.usage;
+        // API 응답의 사용량 데이터를 로컬 형식으로 변환
+        backupData[engineType] = {
+          period: result.usage.yearMonth || new Date().toISOString().slice(0, 7),
+          planType: result.usage.userPlan || user.plan,
+          tokens: {
+            input: result.usage.inputTokens || 0,
+            output: result.usage.outputTokens || 0,
+            total: result.usage.totalTokens || 0
+          },
+          characters: {
+            input: result.usage.characters?.input || 0,
+            output: result.usage.characters?.output || 0
+          },
+          messageCount: result.usage.messageCount || 0,
+          dailyUsage: result.usage.dailyUsage || {},
+          limits: result.usage.limits || PLAN_LIMITS[user.plan]?.[engineType] || PLAN_LIMITS.free[engineType],
+          firstUsedAt: result.usage.createdAt || result.usage.firstUsedAt,
+          lastUsedAt: result.usage.lastUsedAt || result.usage.updatedAt
+        };
+        
+        // 로컬 스토리지 업데이트
+        localStorage.setItem(USAGE_KEY, JSON.stringify(backupData));
         localStorage.setItem(USAGE_KEY + '_backup', JSON.stringify(backupData));
       }
       
+      // 실제 퍼센티지 계산 (API 응답 기반)
+      const actualPercentage = result.percentage !== undefined ? 
+        result.percentage : 
+        Math.round((result.usage?.totalTokens || 0) / (result.usage?.limits?.monthlyTokens || 500000) * 100);
+      
       return {
         success: true,
-        percentage: result.percentage,
+        percentage: actualPercentage,
         remaining: result.remaining,
         usage: result.usage
       };
@@ -614,79 +658,79 @@ export const getAllUsageData = async () => {
     
     console.log(`📊 전체 사용량 데이터 조회: ${user.userId}`);
     
-    // DynamoDB API 호출
-    const response = await fetch(`${USAGE_API_BASE_URL}/usage/${encodeURIComponent(user.userId)}/all`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
+    // T5와 H8 각각 호출
+    const [t5Response, h8Response] = await Promise.all([
+      fetch(`${USAGE_API_BASE_URL}/usage/${encodeURIComponent(user.userId)}/T5`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      }),
+      fetch(`${USAGE_API_BASE_URL}/usage/${encodeURIComponent(user.userId)}/H8`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      })
+    ]);
     
-    if (!response.ok) {
-      throw new Error(`API 오류: ${response.status}`);
-    }
+    const t5Result = await t5Response.json();
+    const h8Result = await h8Response.json();
     
-    const result = await response.json();
-    console.log('📊 API 응답:', result);
+    console.log('📊 T5 응답:', t5Result);
+    console.log('📊 H8 응답:', h8Result);
     
-    if (result.success) {
-      const data = result.data;
-      console.log('📊 받은 데이터:', data);
-      
-      // 대시보드 호환 형식으로 변환
-      return {
-        userId: user.userId,
-        userPlan: user.plan,
-        signupDate: new Date().toISOString(),
-        T5: {
-          monthlyTokensUsed: data.T5?.tokens?.total || 0,
-          inputTokens: data.T5?.tokens?.input || 0,
-          outputTokens: data.T5?.tokens?.output || 0,
-          charactersProcessed: (data.T5?.characters?.input || 0) + (data.T5?.characters?.output || 0),
-          messageCount: data.T5?.messageCount || 0,
-          lastUsedAt: data.T5?.lastUsedAt,
-          limits: data.T5?.limits || PLAN_LIMITS[user.plan]?.T5 || PLAN_LIMITS.free.T5
-        },
-        H8: {
-          monthlyTokensUsed: data.H8?.tokens?.total || 0,
-          inputTokens: data.H8?.tokens?.input || 0,
-          outputTokens: data.H8?.tokens?.output || 0,
-          charactersProcessed: (data.H8?.characters?.input || 0) + (data.H8?.characters?.output || 0),
-          messageCount: data.H8?.messageCount || 0,
-          lastUsedAt: data.H8?.lastUsedAt,
-          limits: data.H8?.limits || PLAN_LIMITS[user.plan]?.H8 || PLAN_LIMITS.free.H8
-        }
-      };
-    } else {
-      throw new Error('사용량 데이터 조회 실패');
-    }
+    // 엔진별 데이터 정리
+    const t5Data = t5Result.success ? t5Result.data : null;
+    const h8Data = h8Result.success ? h8Result.data : null;
     
-  } catch (error) {
-    console.error('사용량 데이터 조회 실패, 로컬 백업 사용:', error);
-    
-    // API 실패 시 로컬 백업 데이터 사용
-    const usageData = getLocalUsageData();
-    const user = getCurrentUser();
-    
+    // 대시보드 호환 형식으로 변환
     return {
       userId: user.userId,
       userPlan: user.plan,
       signupDate: new Date().toISOString(),
       T5: {
-        monthlyTokensUsed: usageData.T5?.tokens?.total || 0,
-        inputTokens: usageData.T5?.tokens?.input || 0,
-        outputTokens: usageData.T5?.tokens?.output || 0,
-        charactersProcessed: (usageData.T5?.characters?.input || 0) + (usageData.T5?.characters?.output || 0),
-        messageCount: usageData.T5?.messageCount || 0,
+        monthlyTokensUsed: t5Data?.totalTokens || 0,
+        inputTokens: t5Data?.inputTokens || 0,
+        outputTokens: t5Data?.outputTokens || 0,
+        charactersProcessed: 0, // 간단화
+        messageCount: t5Data?.messageCount || 0,
+        lastUsedAt: t5Data?.lastUsedAt,
         limits: PLAN_LIMITS[user.plan]?.T5 || PLAN_LIMITS.free.T5
       },
       H8: {
-        monthlyTokensUsed: usageData.H8?.tokens?.total || 0,
-        inputTokens: usageData.H8?.tokens?.input || 0,
-        outputTokens: usageData.H8?.tokens?.output || 0,
-        charactersProcessed: (usageData.H8?.characters?.input || 0) + (usageData.H8?.characters?.output || 0),
-        messageCount: usageData.H8?.messageCount || 0,
+        monthlyTokensUsed: h8Data?.totalTokens || 0,
+        inputTokens: h8Data?.inputTokens || 0,
+        outputTokens: h8Data?.outputTokens || 0,
+        charactersProcessed: 0, // 간단화
+        messageCount: h8Data?.messageCount || 0,
+        lastUsedAt: h8Data?.lastUsedAt,
         limits: PLAN_LIMITS[user.plan]?.H8 || PLAN_LIMITS.free.H8
+      }
+    };
+    
+  } catch (error) {
+    console.error('사용량 데이터 조회 실패:', error);
+    // 오류 시 기본값 반환
+    const user = getCurrentUser();
+    return {
+      userId: user.userId,
+      userPlan: user.plan,
+      signupDate: new Date().toISOString(),
+      T5: {
+        monthlyTokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        charactersProcessed: 0,
+        messageCount: 0,
+        lastUsedAt: null,
+        limits: PLAN_LIMITS[user.plan]?.T5 || PLAN_LIMITS.free.T5
       },
-      isBackup: true
+      H8: {
+        monthlyTokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        charactersProcessed: 0,
+        messageCount: 0,
+        lastUsedAt: null,
+        limits: PLAN_LIMITS[user.plan]?.H8 || PLAN_LIMITS.free.H8
+      }
     };
   }
 };

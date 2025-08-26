@@ -1,0 +1,3 @@
+{
+  "application/json": "#set($inputRoot = $input.path('$'))\n{\n  \"httpMethod\": \"$context.httpMethod\",\n  \"pathParameters\": {\n    \"userId\": \"$input.params('userId')\",\n    \"engineType\": \"$input.params('engineType')\"\n  },\n  \"queryStringParameters\": $input.json('$.queryStringParameters'),\n  \"headers\": $input.json('$.headers'),\n  \"body\": \"$util.escapeJavaScript($input.body)\"\n}"
+}

@@ -241,6 +241,44 @@ class AuthService {
     }
   }
 
+  // 토큰 갱신
+  async refreshTokens() {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        console.log('Refresh token not found');
+        return null;
+      }
+
+      const { InitiateAuthCommand } = await import('@aws-sdk/client-cognito-identity-provider');
+      const command = new InitiateAuthCommand({
+        ClientId: this.clientId,
+        AuthFlow: 'REFRESH_TOKEN_AUTH',
+        AuthParameters: {
+          REFRESH_TOKEN: refreshToken
+        }
+      });
+
+      const response = await this.cognitoClient.send(command);
+      
+      if (response.AuthenticationResult) {
+        // 새 토큰 저장
+        localStorage.setItem('authToken', response.AuthenticationResult.AccessToken);
+        localStorage.setItem('idToken', response.AuthenticationResult.IdToken);
+        
+        console.log('✅ 토큰 갱신 성공');
+        return {
+          success: true,
+          accessToken: response.AuthenticationResult.AccessToken,
+          idToken: response.AuthenticationResult.IdToken
+        };
+      }
+    } catch (error) {
+      console.error('토큰 갱신 실패:', error);
+      return null;
+    }
+  }
+
   // 현재 사용자 정보 가져오기 (저장된 토큰 사용)
   async getCurrentUser() {
     try {
@@ -249,7 +287,21 @@ class AuthService {
         return null;
       }
 
-      return await this.getCurrentUserInfo(accessToken);
+      try {
+        return await this.getCurrentUserInfo(accessToken);
+      } catch (error) {
+        // 토큰 만료 시 갱신 시도
+        if (error.name === 'NotAuthorizedException' || error.message?.includes('expired')) {
+          console.log('Access token expired, attempting refresh...');
+          const refreshResult = await this.refreshTokens();
+          
+          if (refreshResult && refreshResult.success) {
+            // 갱신된 토큰으로 다시 시도
+            return await this.getCurrentUserInfo(refreshResult.accessToken);
+          }
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('현재 사용자 가져오기 실패:', error);
       return null;
@@ -294,8 +346,18 @@ class AuthService {
   async isAuthenticated() {
     try {
       const accessToken = localStorage.getItem('authToken');
-      if (!accessToken) {
+      const refreshToken = localStorage.getItem('refreshToken');
+      
+      if (!accessToken && !refreshToken) {
         return false;
+      }
+
+      // refreshToken만 있는 경우 토큰 갱신 시도
+      if (!accessToken && refreshToken) {
+        const refreshResult = await this.refreshTokens();
+        if (!refreshResult || !refreshResult.success) {
+          return false;
+        }
       }
 
       // 토큰의 유효성을 간단히 확인 (실제로는 JWT 파싱 필요)

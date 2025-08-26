@@ -151,7 +151,7 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
       <div className="container mx-auto px-4 py-6">
 
         {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-bg-100 rounded-lg p-4 border border-bg-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-text-300 text-sm">총 토큰 사용량</span>
@@ -195,18 +195,6 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
             </div>
           </div>
 
-          <div className="bg-bg-100 rounded-lg p-4 border border-bg-300">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-text-300 text-sm">문자 수</span>
-              <Package size={16} className="text-text-400" />
-            </div>
-            <div className="text-2xl font-semibold text-text-100">
-              {formatNumber(engineData.charactersProcessed)}
-            </div>
-            <div className="text-xs text-text-400 mt-1">
-              / {formatNumber(currentPlanLimits.monthlyCharacters)}
-            </div>
-          </div>
         </div>
 
         {/* Usage Progress */}
@@ -226,34 +214,6 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
               </div>
             </div>
 
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-text-300">문자 사용률</span>
-                <span className="text-sm font-medium text-text-100">
-                  {currentPlanLimits.monthlyCharacters > 0 
-                    ? ((engineData.charactersProcessed / currentPlanLimits.monthlyCharacters) * 100).toFixed(1)
-                    : 0}%
-                </span>
-              </div>
-              <div className="relative h-3 bg-bg-200 rounded-full overflow-hidden">
-                <div
-                  className={clsx(
-                    "absolute left-0 top-0 h-full transition-all duration-500",
-                    getUsageBarColor(currentPlanLimits.monthlyCharacters > 0 
-                      ? (engineData.charactersProcessed / currentPlanLimits.monthlyCharacters) * 100
-                      : 0)
-                  )}
-                  style={{
-                    width: `${Math.min(
-                      currentPlanLimits.monthlyCharacters > 0 
-                        ? (engineData.charactersProcessed / currentPlanLimits.monthlyCharacters) * 100
-                        : 0, 
-                      100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
           </div>
         </div>
 
@@ -296,21 +256,9 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-text-300">월간 문자</span>
-                <span className="text-text-100 font-medium">
-                  {formatNumber(currentPlanLimits.monthlyCharacters)}
-                </span>
-              </div>
-              <div className="flex justify-between">
                 <span className="text-text-300">일일 토큰</span>
                 <span className="text-text-100 font-medium">
                   {formatNumber(currentPlanLimits.dailyTokens)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-300">일일 문자</span>
-                <span className="text-text-100 font-medium">
-                  {formatNumber(currentPlanLimits.dailyCharacters)}
                 </span>
               </div>
             </div>

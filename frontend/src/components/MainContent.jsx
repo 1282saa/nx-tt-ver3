@@ -11,6 +11,8 @@ import PromptManagePanel from "./PromptManagePanel";
 import T5NH8GuideSection from "./T5NH8GuideSection";
 import Header from "./Header";
 import * as promptService from '../services/promptService';
+import { MainContentSkeleton } from "./SkeletonLoading";
+import { getUsagePercentage, fetchUsageFromServer } from '../services/usageService';
 
 const MainContent = ({
   project,
@@ -31,24 +33,64 @@ const MainContent = ({
   const [currentDescription, setCurrentDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [usagePercentage, setUsagePercentage] = useState(() => {
+    // 초기값을 즉시 계산해서 설정 (0%에서 시작하지 않음)
+    return getUsagePercentage(selectedEngine);
+  }); // 사용량 상태 추가
   const dropdownRef = useRef(null);
   const dragCounterRef = useRef(0);
   const chatInputRef = useRef(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // 초기 데이터 로드 (description 가져오기)
+  // 초기 데이터 로드 (description과 사용량 가져오기)
   useEffect(() => {
-    const loadDescription = async () => {
+    const loadData = async () => {
       try {
+        // Description 로드
         const data = await promptService.getPrompt(selectedEngine);
         if (data.prompt) {
           setCurrentDescription(data.prompt.description || '');
           setEditDescription(data.prompt.description || '');
         }
+        
+        // 사용량 로드
+        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        const userId = userInfo.email || userInfo.username || 'anonymous';
+        
+        // 서버에서 최신 사용량 가져오기
+        try {
+          const response = await fetch(`https://qyfams2iva.execute-api.us-east-1.amazonaws.com/prod/usage/${encodeURIComponent(userId)}/${selectedEngine}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.data) {
+              // 퍼센티지 직접 계산
+              const totalTokens = result.data.totalTokens || 0;
+              const monthlyLimit = result.data.limits?.monthlyTokens || 500000;
+              const percentage = Math.round((totalTokens / monthlyLimit) * 100);
+              setUsagePercentage(percentage);
+              console.log(`📊 ${selectedEngine} 사용량 로드: ${percentage}% (${totalTokens}/${monthlyLimit})`);
+            }
+          }
+        } catch (error) {
+          console.log('서버 사용량 조회 실패, 로컬 데이터 사용');
+          // 로컬 데이터로 폴백
+          const percentage = getUsagePercentage(selectedEngine);
+          setUsagePercentage(percentage);
+        }
       } catch (error) {
-        console.error('Failed to load description:', error);
+        console.error('Failed to load data:', error);
+      } finally {
+        // 로딩 완료 후 스켈레톤 숨기기
+        setTimeout(() => setIsInitialLoad(false), 100);
       }
     };
-    loadDescription();
+    loadData();
   }, [selectedEngine]);
 
   useEffect(() => {
@@ -78,7 +120,8 @@ const MainContent = ({
 
   const handleSendMessage = (message) => {
     console.log("Message sent:", message);
-    onStartChat(message);
+    // onStartChat is already called by ChatInput component, don't call it here
+    // This was causing duplicate calls
   };
 
   const handleTitlesGenerated = (data) => {
@@ -156,6 +199,11 @@ const MainContent = ({
     }
   };
 
+  // 초기 로딩 시 스켈레톤 표시
+  if (isInitialLoad) {
+    return <MainContentSkeleton />;
+  }
+
   return (
     <div 
       className="min-h-screen flex flex-col"
@@ -200,7 +248,14 @@ const MainContent = ({
         </div>
       )}
       
-      <Header onLogout={onLogout} onHome={onBackToLanding} onToggleSidebar={onToggleSidebar} isSidebarOpen={isSidebarOpen} onDashboard={onDashboard} />
+      <Header 
+        onLogout={onLogout} 
+        onHome={onBackToLanding} 
+        onToggleSidebar={onToggleSidebar} 
+        isSidebarOpen={isSidebarOpen} 
+        onDashboard={onDashboard}
+      />
+
 
       {/* Main Grid */}
       <main
@@ -324,6 +379,48 @@ const MainContent = ({
                 </div>
               </div>
             )}
+
+            {/* 사용량 표시 - 입력창 바로 위에 촘촘하게 배치 */}
+            <div className="w-full mb-2">
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 px-3 py-1 rounded-full" 
+                     style={{ backgroundColor: "hsl(var(--bg-200)/0.8)", backdropFilter: "blur(8px)" }}>
+                  <span className="text-xs text-text-300">
+                    {selectedEngine}
+                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    <div 
+                      className="w-20 h-1.5 rounded-full overflow-hidden"
+                      style={{ backgroundColor: "hsl(var(--bg-300))" }}
+                    >
+                      <div
+                        className={clsx(
+                          "h-full transition-all duration-500 ease-out rounded-full",
+                          usagePercentage > 80
+                            ? "bg-red-500"
+                            : usagePercentage > 50
+                            ? "bg-yellow-500"
+                            : "bg-green-500"
+                        )}
+                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                      />
+                    </div>
+                    <span
+                      className={clsx(
+                        "text-xs font-medium",
+                        usagePercentage > 80
+                          ? "text-red-500"
+                          : usagePercentage > 50
+                          ? "text-yellow-500"
+                          : "text-green-500"
+                      )}
+                    >
+                      {usagePercentage}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Enhanced Chat Input */}
             <div className="z-10 w-full">

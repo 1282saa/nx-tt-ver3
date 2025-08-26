@@ -53,18 +53,18 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
     if (hasValidTitles) {
       return (
         <>
-          <div className="whitespace-normal break-words">
+          <div className="whitespace-normal break-words mb-4 leading-relaxed">
             안녕하세요! 기사 제목을 생성했습니다.
           </div>
-          <div className="whitespace-normal break-words">
+          <div className="whitespace-normal break-words mb-4 leading-relaxed">
             아래 {content.titles.length}개의 제목 중에서 가장 적합한 것을
             선택하시거나, 수정하여 사용하실 수 있습니다:
           </div>
-          <ol className="list-decimal space-y-2 pl-7">
+          <ol className="list-decimal space-y-2 pl-7 mb-4">
             {content.titles.map((title, index) => (
               <li
                 key={index}
-                className="whitespace-normal break-words group/item relative"
+                className="whitespace-normal break-words group/item relative leading-relaxed"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="flex-1">{title}</span>
@@ -83,7 +83,7 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
               </li>
             ))}
           </ol>
-          <div className="whitespace-normal break-words">
+          <div className="whitespace-normal break-words leading-relaxed">
             추가로 다른 스타일의 제목이 필요하시거나, 특정 톤앤매너로 수정을
             원하시면 말씀해 주세요.
           </div>
@@ -104,7 +104,7 @@ const AssistantMessage = React.memo(({ content, timestamp, messageId }) => {
         <div
           className="chatbot-markdown prose prose-lg max-w-none"
           style={{
-            fontFamily: '"Times New Roman", Times, serif',
+            fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
           }}
         >
           <ReactMarkdown

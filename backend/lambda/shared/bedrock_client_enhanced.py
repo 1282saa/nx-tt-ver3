@@ -190,12 +190,12 @@ def stream_claude_response_enhanced(
                 "temperature": TEMPERATURE,
                 "system": system_prompt,
                 "messages": messages,
-                "stream": True,
                 "top_p": 0.9,  # 다양성 제어
                 "top_k": 40    # 선택 가능한 토큰 제한
             }
             
             logger.info(f"Calling Bedrock (attempt {attempt + 1}/{max_retries + 1})")
+            logger.info(f"Request body: {json.dumps(body)[:500]}...")  # body 내용 로깅
             
             response = bedrock_runtime.invoke_model_with_response_stream(
                 modelId=CLAUDE_MODEL_ID,

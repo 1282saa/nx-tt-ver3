@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared'))
 
 # 대화 관리자 import
 try:
-    from conversation_manager import ConversationManager
+    from conversation_manager import ConversationManager as CM
+    ConversationManager = CM  # Use the class directly
     logger.info("ConversationManager imported successfully")
 except ImportError:
     logger.warning("Could not import ConversationManager")
@@ -74,9 +75,49 @@ def lambda_handler(event, context):
         engine_type = body.get('engineType', 'T5')
         conversation_history = body.get('conversationHistory', [])
         conversation_id = body.get('conversationId', None)
+        user_id = body.get('userId', body.get('email', connection_id))
         
         logger.info(f"Action: {action}, Engine: {engine_type}, Message: {user_message[:100]}...")
-        logger.info(f"Conversation ID: {conversation_id}, History Length: {len(conversation_history)}")
+        logger.info(f"Conversation ID: {conversation_id}, User ID: {user_id}, Client History Length: {len(conversation_history)}")
+        
+        # 클라이언트가 보낸 대화 히스토리 내용 로그 (디버깅용)
+        logger.info(f"=== RECEIVED CONVERSATION HISTORY ===")
+        logger.info(f"Total messages from client: {len(conversation_history)}")
+        if conversation_history:
+            logger.info(f"Client history preview (last 3 messages):")
+            for i, msg in enumerate(conversation_history[-3:]):
+                role = msg.get('type', msg.get('role', 'unknown'))
+                content = msg.get('content', '')[:100]
+                logger.info(f"  [{i}] {role}: {content}...")
+        else:
+            logger.info("  No history received from client")
+        logger.info(f"=== END RECEIVED HISTORY ===")
+        
+        # 대화 초기화 액션 추가
+        if action == 'clearHistory' and conversation_id:
+            # 대화 히스토리 초기화
+            logger.info(f"Clearing conversation history for: {conversation_id}")
+            if ConversationManager:
+                # DB에서 대화 삭제
+                try:
+                    # Use ConversationManager's table reference
+                    from conversation_manager import conversations_table
+                    response = conversations_table.delete_item(
+                        Key={'conversationId': conversation_id}
+                    )
+                    logger.info(f"Conversation {conversation_id} cleared from DB")
+                except Exception as e:
+                    logger.error(f"Failed to clear conversation: {e}")
+            
+            send_message_to_client(connection_id, {
+                'type': 'history_cleared',
+                'message': '대화 기록이 초기화되었습니다.'
+            }, apigateway_client)
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'message': 'History cleared'})
+            }
         
         if action == 'sendMessage':
             # 대화 ID가 없으면 생성
@@ -84,18 +125,38 @@ def lambda_handler(event, context):
                 conversation_id = str(uuid.uuid4())
                 logger.info(f"Generated new conversation ID: {conversation_id}")
             
-            # DynamoDB에서 대화 히스토리 로드 (클라이언트 히스토리보다 우선)
-            if ConversationManager:
+            # 대화 히스토리 병합 전략: 클라이언트 히스토리를 우선으로 사용
+            merged_history = []
+            
+            # 1. 클라이언트가 보낸 히스토리가 있으면 그것을 기본으로 사용
+            if conversation_history and len(conversation_history) > 0:
+                logger.info(f"Using client-provided history as base: {len(conversation_history)} messages")
+                merged_history = conversation_history
+            
+            # 2. DB에서 추가 히스토리 확인 (클라이언트에 없는 메시지 보충)
+            if ConversationManager and conversation_id:
                 db_history = ConversationManager.get_conversation_history(conversation_id)
-                if db_history:
-                    logger.info(f"Loaded {len(db_history)} messages from DynamoDB")
-                    # DB 히스토리를 사용 (더 신뢰할 수 있음)
-                    conversation_history = db_history
+                if db_history and len(db_history) > 0:
+                    logger.info(f"Found {len(db_history)} messages in DynamoDB")
+                    
+                    # 클라이언트 히스토리가 비어있으면 DB 히스토리 사용
+                    if not merged_history:
+                        merged_history = db_history
+                        logger.info(f"Using DB history as no client history available")
+                    else:
+                        # 병합 로직: DB에만 있는 이전 메시지들을 앞에 추가
+                        if len(db_history) > len(merged_history):
+                            additional_messages = db_history[:len(db_history) - len(merged_history)]
+                            merged_history = additional_messages + merged_history
+                            logger.info(f"Merged {len(additional_messages)} additional messages from DB")
+            
+            conversation_history = merged_history
+            logger.info(f"Final conversation history: {len(conversation_history)} messages")
             
             # 채팅 메시지 처리 (대화 히스토리 포함)
             response = process_chat_message_with_bedrock(
                 user_message, engine_type, connection_id, apigateway_client, 
-                conversation_history, conversation_id
+                conversation_history, conversation_id, user_id
             )
             return response
         else:
@@ -128,13 +189,29 @@ def lambda_handler(event, context):
         }
 
 
-def process_chat_message_with_bedrock(user_message, engine_type, connection_id, apigateway_client, conversation_history=None, conversation_id=None):
+def process_chat_message_with_bedrock(user_message, engine_type, connection_id, apigateway_client, conversation_history=None, conversation_id=None, user_id=None):
     """실제 Bedrock Claude를 사용한 채팅 메시지 처리 (대화 히스토리 포함)"""
     
     try:
         # 0. 사용자 메시지를 DynamoDB에 저장
         if ConversationManager and conversation_id:
-            ConversationManager.save_message(conversation_id, 'user', user_message, engine_type)
+            logger.info(f"Saving user message to DynamoDB: conversation_id={conversation_id}, user_id={user_id}")
+            logger.info(f"User message content: {user_message[:200]}...")
+            result = ConversationManager.save_message(conversation_id, 'user', user_message, engine_type, user_id)
+            logger.info(f"User message save result: {result}")
+            
+            # 저장 후 확인
+            saved_history = ConversationManager.get_conversation_history(conversation_id)
+            logger.info(f"After save - Total messages in DB: {len(saved_history) if saved_history else 0}")
+            
+            # 대화 히스토리 디버깅
+            if saved_history:
+                logger.info("=== SAVED CONVERSATION HISTORY ===")
+                for idx, msg in enumerate(saved_history[-5:]):  # 최근 5개만
+                    logger.info(f"  [{idx}] {msg.get('role', msg.get('type'))}: {msg.get('content', '')[:100]}...")
+                logger.info("=== END OF SAVED HISTORY ===")
+        else:
+            logger.warning(f"Cannot save user message: ConversationManager={ConversationManager}, conversation_id={conversation_id}")
         
         # 1. 처리 시작 알림 (제거 - UI에 표시하지 않음)
         # send_message_to_client(connection_id, {
@@ -194,7 +271,45 @@ def process_chat_message_with_bedrock(user_message, engine_type, connection_id, 
         
         # 7. AI 응답을 DynamoDB에 저장
         if ConversationManager and conversation_id and total_response:
-            ConversationManager.save_message(conversation_id, 'assistant', total_response, engine_type)
+            logger.info(f"Saving AI response to DynamoDB: conversation_id={conversation_id}, response_length={len(total_response)}")
+            result = ConversationManager.save_message(conversation_id, 'assistant', total_response, engine_type, user_id)
+            logger.info(f"AI response save result: {result}")
+        else:
+            logger.warning(f"Cannot save AI response: ConversationManager={ConversationManager}, conversation_id={conversation_id}, response_length={len(total_response) if total_response else 0}")
+        
+        # 7.5 사용량 추적 (Usage Tracking)
+        try:
+            import urllib3
+            http = urllib3.PoolManager()
+            
+            # 사용자 ID 사용 (전달받은 user_id 또는 connection_id)
+            if not user_id:
+                user_id = connection_id
+            
+            usage_payload = {
+                'userId': user_id,
+                'engineType': engine_type,
+                'inputText': user_message,
+                'outputText': total_response
+            }
+            
+            # Usage API 호출
+            usage_api_url = 'https://qyfams2iva.execute-api.us-east-1.amazonaws.com/prod/usage/update'
+            response = http.request(
+                'POST',
+                usage_api_url,
+                body=json.dumps(usage_payload),
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            if response.status == 200:
+                logger.info(f"Usage tracking successful for {user_id}, engine: {engine_type}")
+            else:
+                logger.warning(f"Usage tracking failed: {response.status}")
+                
+        except Exception as e:
+            logger.error(f"Usage tracking error: {str(e)}")
+            # 사용량 추적 실패해도 메시지 처리는 계속
         
         # 8. 완료 알림 (conversation_id 포함)
         send_message_to_client(connection_id, {
@@ -279,31 +394,57 @@ def stream_claude_response_inline(user_message, system_prompt, conversation_hist
         if conversation_history and len(conversation_history) > 0:
             logger.info(f"Processing {len(conversation_history)} history messages")
             
-            # 대화 히스토리를 Claude 형식으로 변환 (최근 10개까지만)
-            recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-            
-            for msg in recent_history:
-                role = msg.get('role', 'user')
-                content = msg.get('content', '')
+            # 대화 히스토리를 Claude 형식으로 변환
+            for i, msg in enumerate(conversation_history):
+                # type 또는 role 필드 모두 처리
+                msg_type = msg.get('type') or msg.get('role')
+                content = msg.get('content', '').strip()
                 
-                # role 변환: type -> role
-                if msg.get('type'):
-                    role = 'user' if msg['type'] == 'user' else 'assistant'
+                # 빈 메시지는 건너뛰기
+                if not content:
+                    logger.warning(f"Skipping empty message at index {i}")
+                    continue
                 
-                # Claude API는 user/assistant만 인식
-                if role in ['user', 'assistant'] and content:
-                    messages.append({
-                        "role": role,
-                        "content": content
-                    })
+                # role 정규화
+                if msg_type in ['user', 'human']:
+                    role = 'user'
+                elif msg_type in ['assistant', 'ai', 'bot']:
+                    role = 'assistant'
+                else:
+                    logger.warning(f"Unknown message type at index {i}: {msg_type}, defaulting to user")
+                    role = 'user'
+                
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+                
+                logger.info(f"Message {i+1}: role={role}, content_length={len(content)}")
             
-            logger.info(f"Converted {len(messages)} messages for Claude")
+            logger.info(f"Converted {len(messages)} valid messages for Claude")
         
         # 현재 메시지 추가
         messages.append({
             "role": "user",
             "content": user_message
         })
+        
+        # Claude API 규칙: user/assistant 메시지가 번갈아 나와야 함
+        # 연속된 같은 역할 메시지 병합
+        cleaned_messages = []
+        last_role = None
+        
+        for msg in messages:
+            if msg['role'] == last_role and cleaned_messages:
+                # 같은 역할이 연속되면 내용을 병합
+                cleaned_messages[-1]['content'] += "\n\n" + msg['content']
+                logger.info(f"Merged consecutive {msg['role']} messages")
+            else:
+                cleaned_messages.append(msg)
+                last_role = msg['role']
+        
+        messages = cleaned_messages
+        logger.info(f"After cleaning: {len(messages)} messages")
         
         # Claude Native API 호출
         import boto3
@@ -316,11 +457,16 @@ def stream_claude_response_inline(user_message, system_prompt, conversation_hist
             "max_tokens": 8192,
             "temperature": 0.2,
             "system": system_prompt,
-            "messages": messages,
-            "stream": True
+            "messages": messages
         }
         
         logger.info(f"Calling Claude with {len(messages)} messages")
+        
+        # 디버깅: 실제 전송되는 메시지 내용 로그
+        logger.info("=== MESSAGES BEING SENT TO CLAUDE ===")
+        for i, msg in enumerate(messages):
+            logger.info(f"Message {i+1}: role={msg['role']}, content_preview={msg['content'][:200] if msg['content'] else 'empty'}...")
+        logger.info("=== END OF MESSAGES ===")
         
         response = bedrock_runtime.invoke_model_with_response_stream(
             modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",

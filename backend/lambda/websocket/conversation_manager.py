@@ -17,7 +17,7 @@ class ConversationManager:
     """대화 내역을 DynamoDB에서 관리"""
     
     @staticmethod
-    def save_message(conversation_id: str, role: str, content: str, engine_type: str = 'T5'):
+    def save_message(conversation_id: str, role: str, content: str, engine_type: str = 'T5', user_id: str = None):
         """개별 메시지 저장"""
         try:
             timestamp = datetime.utcnow().isoformat() + 'Z'
@@ -34,7 +34,8 @@ class ConversationManager:
                 messages = item.get('messages', [])
                 messages.append({
                     'id': message_id,
-                    'role': role,
+                    'type': 'user' if role == 'user' else 'assistant',  # 프론트엔드 호환성
+                    'role': role,  # 백워드 호환성
                     'content': content,
                     'timestamp': timestamp
                 })
@@ -43,32 +44,45 @@ class ConversationManager:
                 if len(messages) > 50:
                     messages = messages[-50:]
                 
-                # 업데이트
+                # 업데이트 (userId가 없으면 추가)
+                update_expr = 'SET messages = :msgs, updatedAt = :updated'
+                expr_values = {
+                    ':msgs': messages,
+                    ':updated': timestamp
+                }
+                
+                # userId가 없는 경우 추가
+                if user_id and not item.get('userId'):
+                    update_expr += ', userId = :uid'
+                    expr_values[':uid'] = user_id
+                
                 conversations_table.update_item(
                     Key={'conversationId': conversation_id},
-                    UpdateExpression='SET messages = :msgs, updatedAt = :updated',
-                    ExpressionAttributeValues={
-                        ':msgs': messages,
-                        ':updated': timestamp
-                    }
+                    UpdateExpression=update_expr,
+                    ExpressionAttributeValues=expr_values
                 )
             else:
                 # 새 대화 생성
-                conversations_table.put_item(
-                    Item={
-                        'conversationId': conversation_id,
-                        'engineType': engine_type,
-                        'messages': [{
-                            'id': message_id,
-                            'role': role,
-                            'content': content,
-                            'timestamp': timestamp
-                        }],
-                        'createdAt': timestamp,
-                        'updatedAt': timestamp,
-                        'title': content[:50] if role == 'user' else 'New Conversation'
-                    }
-                )
+                item = {
+                    'conversationId': conversation_id,
+                    'engineType': engine_type,
+                    'messages': [{
+                        'id': message_id,
+                        'type': 'user' if role == 'user' else 'assistant',  # 프론트엔드 호환성
+                        'role': role,  # 백워드 호환성
+                        'content': content,
+                        'timestamp': timestamp
+                    }],
+                    'createdAt': timestamp,
+                    'updatedAt': timestamp,
+                    'title': content[:50] if role == 'user' else 'New Conversation'
+                }
+                
+                # userId 추가
+                if user_id:
+                    item['userId'] = user_id
+                
+                conversations_table.put_item(Item=item)
             
             logger.info(f"Message saved: {conversation_id} - {role}")
             return True

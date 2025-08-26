@@ -11,7 +11,15 @@ TABLE_NAME="nx-tt-dev-ver3-conversations"
 # 1. 배포 디렉토리 생성
 echo "1. Creating deployment package..."
 cd lambda/websocket
-zip -r websocket_deployment.zip websocket_message_handler.py
+# Lambda가 lambda_function.py를 찾도록 복사
+cp websocket_message_handler.py lambda_function.py
+# shared 폴더의 필요한 파일들 복사
+cp ../shared/bedrock_client.py . 2>/dev/null
+cp ../shared/bedrock_client_enhanced.py . 2>/dev/null
+# 모든 필요한 파일 포함
+zip -r websocket_deployment.zip lambda_function.py conversation_manager.py bedrock_client.py bedrock_client_enhanced.py 2>/dev/null
+# 임시 파일 삭제
+rm lambda_function.py bedrock_client.py bedrock_client_enhanced.py 2>/dev/null
 
 # 2. Lambda 함수 업데이트 또는 생성
 echo "2. Updating Lambda function..."

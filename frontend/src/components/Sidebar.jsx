@@ -22,11 +22,33 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
   useEffect(() => {
     loadConversations();
   }, [selectedEngine]);
+  
+  // refreshSidebar 이벤트 리스너 추가
+  useEffect(() => {
+    const handleRefresh = () => {
+      console.log('🔄 사이드바 새로고침 이벤트 수신');
+      loadConversations();
+    };
+    
+    window.addEventListener('refreshSidebar', handleRefresh);
+    return () => window.removeEventListener('refreshSidebar', handleRefresh);
+  }, [selectedEngine]);
 
   const loadConversations = async () => {
     try {
       setLoading(true);
       const convs = await listConversations(selectedEngine);
+      
+      console.log(`📊 사이드바 대화 목록 (${selectedEngine}):`, {
+        totalCount: convs.length,
+        first5: convs.slice(0, 5).map(c => ({
+          id: c.conversationId,
+          title: c.title,
+          updatedAt: c.updatedAt,
+          engineType: c.engineType
+        }))
+      });
+      
       setConversations(convs);
       // localStorage에서 즐겨찾기 불러오기
       const savedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
@@ -177,11 +199,38 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
 
       {/* New Chat Button */}
       <div className="flex flex-col px-1.5 pt-0.5 gap-px mb-2">
-        <Link
-          to={`/${selectedEngine.toLowerCase()}`}
+        <button
+          onClick={() => {
+            // 현재 URL에서 conversationId 추출
+            const pathParts = location.pathname.split('/');
+            const conversationId = pathParts[pathParts.length - 1];
+            
+            // 현재 대화의 캐시만 삭제 (다른 대화는 유지)
+            if (conversationId && conversationId !== 'chat') {
+              const cacheKey = `conv:${conversationId}`;
+              localStorage.removeItem(cacheKey);
+              console.log(`🗑️ 현재 대화 캐시 삭제: ${cacheKey}`);
+            }
+            
+            // 임시 데이터 정리
+            localStorage.removeItem('pendingMessage');
+            localStorage.removeItem('pendingConversationId');
+            
+            // sessionStorage 정리 (모든 processed 키 제거)
+            Object.keys(sessionStorage).forEach(key => {
+              if (key.startsWith('processed_')) {
+                sessionStorage.removeItem(key);
+              }
+            });
+            
+            console.log("🔄 새 채팅 시작 - 이전 대화 기록 정리 완료");
+            
+            // 메인 페이지로 이동 (conversationId 없이)
+            window.location.href = `/${selectedEngine.toLowerCase()}`;
+          }}
           className="group flex items-center h-9 px-2.5 py-2 rounded-lg 
             hover:bg-accent-main-100/[0.08] active:bg-accent-main-100/[0.15]
-            transition-all ease-in-out active:scale-[0.985]"
+            transition-all ease-in-out active:scale-[0.985] w-full text-left"
         >
           <div className="flex flex-row items-center gap-2">
             <div className="w-6 h-6 flex items-center justify-center rounded-full 
@@ -195,7 +244,7 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
               새 채팅
             </span>
           </div>
-        </Link>
+        </button>
       </div>
 
       {/* Conversation Lists */}
@@ -304,6 +353,13 @@ const ConversationItem = ({
         className={`flex items-center gap-3 h-8 px-3 rounded-md text-xs
           hover:bg-bg-400 transition-colors relative
           ${isActive ? 'bg-bg-400 text-text-100' : 'text-text-300 hover:text-text-100'}`}
+        onClick={() => {
+          console.log("🔗 스레드 클릭:", {
+            conversationId: conversation.conversationId,
+            targetUrl: `/${selectedEngine.toLowerCase()}/chat/${conversation.conversationId}`,
+            currentUrl: window.location.pathname
+          });
+        }}
       >
         {isFavorite && <Star size={12} className="flex-shrink-0 fill-current" />}
         <span className="truncate text-sm flex-1">

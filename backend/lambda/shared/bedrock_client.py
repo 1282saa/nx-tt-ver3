@@ -84,8 +84,7 @@ def stream_claude_response(user_message: str, system_prompt: str) -> Iterator[st
             "max_tokens": MAX_TOKENS,
             "temperature": TEMPERATURE,
             "system": system_prompt,
-            "messages": messages,
-            "stream": True
+            "messages": messages
         }
         
         logger.info(f"Calling Bedrock with model: {CLAUDE_MODEL_ID}")

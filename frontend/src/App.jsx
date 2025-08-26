@@ -34,7 +34,6 @@ function AppContent() {
     title: "아키텍쳐",
     isStarred: false,
   });
-  const [chatMessage, setChatMessage] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const sidebarRef = useRef(null);
 
@@ -66,24 +65,36 @@ function AppContent() {
 
   const handleStartChat = (message) => {
     console.log('🚀 handleStartChat called with:', message);
+    
+    // 새 대화 ID 생성 (엔진_타임스탬프 형식)
+    const conversationId = `${selectedEngine}_${Date.now()}`;
+    console.log('🆕 새 대화 ID 생성:', conversationId);
+    
     // localStorage에 임시 저장 (페이지 전환 중 데이터 보존)
     localStorage.setItem('pendingMessage', message);
-    setChatMessage(message);
+    localStorage.setItem('pendingConversationId', conversationId);
+    
+    // conversationId를 포함한 URL로 이동
     const enginePath = selectedEngine.toLowerCase();
-    navigate(`/${enginePath}/chat`);
+    navigate(`/${enginePath}/chat/${conversationId}`, {
+      state: { initialMessage: message }
+    });
+    
+    console.log('📍 대화 페이지로 이동:', `/${enginePath}/chat/${conversationId}`);
   };
 
   const handleBackToMain = () => {
     const enginePath = selectedEngine.toLowerCase();
     navigate(`/${enginePath}`);
-    setChatMessage("");
   };
 
   const handleLogout = async () => {
+    console.log('🚪 App.jsx handleLogout 호출됨');
     try {
       // Cognito 로그아웃
       const authService = (await import('./services/authService')).default;
       await authService.signOut();
+      console.log('✅ Cognito 로그아웃 완료');
     } catch (error) {
       console.error('로그아웃 오류:', error);
     }
@@ -102,7 +113,13 @@ function AppContent() {
     // Header에 사용자 정보 업데이트 알림
     window.dispatchEvent(new CustomEvent('userInfoUpdated'));
     
-    navigate("/");
+    // 현재 페이지가 랜딩 페이지가 아닌 경우에만 랜딩 페이지로 이동
+    if (location.pathname !== '/') {
+      console.log('📍 랜딩 페이지로 이동');
+      navigate("/");
+    } else {
+      console.log('📍 현재 랜딩 페이지 유지');
+    }
   };
 
   const handleLogin = (role = "user") => {
@@ -111,8 +128,8 @@ function AppContent() {
     // location.state에서 엔진 정보 가져오기
     const engine = location.state?.engine || selectedEngine;
     setSelectedEngine(engine);
-    const enginePath = engine.toLowerCase();
-    navigate(`/${enginePath}`);
+    // 랜딩 페이지로 이동
+    navigate("/");
   };
 
   const handleSelectEngine = (engine) => {
@@ -121,7 +138,16 @@ function AppContent() {
       ...prev,
       title: `${engine} 빠른 제목 생성`,
     }));
-    navigate("/login", { state: { engine } });
+    
+    // 로그인 상태 확인
+    if (isLoggedIn) {
+      // 로그인되어 있으면 해당 엔진 페이지로 이동
+      const enginePath = engine.toLowerCase();
+      navigate(`/${enginePath}`);
+    } else {
+      // 로그인되어 있지 않으면 로그인 페이지로
+      navigate("/login", { state: { engine } });
+    }
   };
 
   const handleSignUp = () => {
@@ -213,6 +239,7 @@ function AppContent() {
                   <LandingPage
                     onSelectEngine={handleSelectEngine}
                     onLogin={handleLogin}
+                    onLogout={handleLogout}
                   />
                 </PageTransition>
               } 
@@ -242,7 +269,7 @@ function AppContent() {
                 <ProtectedRoute>
                   <PageTransition pageKey="chat-t5">
                     <ChatPage
-                      initialMessage={location.state?.initialMessage || chatMessage}
+                      initialMessage={location.state?.initialMessage}
                       userRole={userRole}
                       selectedEngine="T5"
                       onLogout={handleLogout}
@@ -263,7 +290,7 @@ function AppContent() {
                 <ProtectedRoute>
                   <PageTransition pageKey="chat-h8">
                     <ChatPage
-                      initialMessage={location.state?.initialMessage || chatMessage}
+                      initialMessage={location.state?.initialMessage}
                       userRole={userRole}
                       selectedEngine="H8"
                       onLogout={handleLogout}
