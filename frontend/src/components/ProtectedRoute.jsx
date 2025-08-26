@@ -3,13 +3,44 @@ import { Navigate } from "react-router-dom";
 import authService from "../services/authService";
 
 const ProtectedRoute = ({ children, requiredRole = null }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userRole, setUserRole] = useState(null);
+  // 초기값을 localStorage에서 바로 확인하여 불필요한 로딩 방지
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('isLoggedIn') === 'true';
+  });
+  const [isLoading, setIsLoading] = useState(false); // 초기 로딩을 false로 설정
+  const [userRole, setUserRole] = useState(() => {
+    return localStorage.getItem('userRole');
+  });
 
   useEffect(() => {
-    checkAuth();
+    // 이미 로그인 상태가 확인되면 바로 children 렌더링
+    if (isAuthenticated) {
+      // 백그라운드에서 세션 유효성 확인
+      checkAuthInBackground();
+    } else {
+      // 로그인되지 않은 경우에만 로딩 표시
+      setIsLoading(true);
+      checkAuth();
+    }
   }, []);
+
+  // 백그라운드에서 세션 확인 (UI 블로킹 없이)
+  const checkAuthInBackground = async () => {
+    try {
+      const authenticated = await authService.isAuthenticated();
+      
+      if (!authenticated) {
+        // 세션이 만료된 경우만 처리
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userInfo');
+        localStorage.removeItem('authToken');
+        setIsAuthenticated(false);
+      }
+    } catch (error) {
+      console.error('백그라운드 인증 확인 오류:', error);
+    }
+  };
 
   const checkAuth = async () => {
     try {

@@ -18,7 +18,7 @@ const pageVariants = {
 const pageTransition = {
   type: "tween",
   ease: [0.25, 0.1, 0.25, 1], // Smoother ease for natural motion
-  duration: 0.12, // 더 빠른 전환
+  duration: 0.08, // 매우 빠른 전환 (80ms)
 };
 
 // Fade-only variant for subtle transitions
@@ -37,7 +37,7 @@ const fadeVariants = {
 const fadeTransition = {
   type: "tween",
   ease: "easeOut",
-  duration: 0.15, // 더 빠른 페이드
+  duration: 0.1, // 더 빠른 페이드 (100ms)
 };
 
 // Slide variants for navigation transitions

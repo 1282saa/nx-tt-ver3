@@ -11,7 +11,7 @@ import PromptManagePanel from "./PromptManagePanel";
 import T5NH8GuideSection from "./T5NH8GuideSection";
 import Header from "./Header";
 import * as promptService from '../services/promptService';
-import { MainContentSkeleton } from "./SkeletonLoading";
+// import { MainContentSkeleton } from "./SkeletonLoading"; // 사용하지 않음
 import { getUsagePercentage, fetchUsageFromServer } from '../services/usageService';
 
 const MainContent = ({
@@ -40,7 +40,7 @@ const MainContent = ({
   const dropdownRef = useRef(null);
   const dragCounterRef = useRef(0);
   const chatInputRef = useRef(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // const [isInitialLoad, setIsInitialLoad] = useState(false); // 사용하지 않음
 
   // 초기 데이터 로드 (description과 사용량 가져오기)
   useEffect(() => {
@@ -86,8 +86,8 @@ const MainContent = ({
       } catch (error) {
         console.error('Failed to load data:', error);
       } finally {
-        // 로딩 완료 후 스켈레톤 숨기기
-        setTimeout(() => setIsInitialLoad(false), 100);
+        // 로딩 완료
+        // setTimeout(() => setIsInitialLoad(false), 100);
       }
     };
     loadData();
@@ -199,10 +199,10 @@ const MainContent = ({
     }
   };
 
-  // 초기 로딩 시 스켈레톤 표시
-  if (isInitialLoad) {
-    return <MainContentSkeleton />;
-  }
+  // 스켈레톤 로딩 제거 - 페이지 전환 시 불필요한 로딩 방지
+  // if (isInitialLoad) {
+  //   return <MainContentSkeleton />;
+  // }
 
   return (
     <div 

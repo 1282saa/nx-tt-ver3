@@ -165,7 +165,9 @@ const ChatPage = ({
       hasLocationState: !!location.state,
       hasInitialMessage: !!location.state?.initialMessage,
       messagesLength: messages.length,
-      loadedConversation: loadedConversationRef.current
+      loadedConversation: loadedConversationRef.current,
+      isCurrentlyStreaming: !!currentAssistantMessageId.current,
+      streamingMessageId: currentAssistantMessageId.current
     });
     
     // URL에 conversationId가 있고, 아직 로드하지 않은 경우
@@ -179,6 +181,12 @@ const ChatPage = ({
             console.log("🔍 서버 응답 전체 데이터:", response);
             
             // 실제 conversation 데이터 추출
+            // 응답 null 체크 추가
+            if (!response) {
+              console.warn("⚠️ 서버 응답이 null입니다");
+              return;
+            }
+            
             const conversationData = response.conversation || response;
             console.log("📋 추출된 conversation 데이터:", conversationData);
             
@@ -206,7 +214,33 @@ const ChatPage = ({
               }));
               
               console.log("✅ 처리된 메시지들:", processedMessages);
-              setMessages(processedMessages);
+              
+              // 🔑 핵심 수정: 현재 스트리밍 중인 AI 메시지가 있는지 확인
+              setMessages((currentMessages) => {
+                const hasStreamingAI = currentMessages.some(msg => 
+                  msg.type === 'assistant' && msg.isStreaming && msg.id === currentAssistantMessageId.current
+                );
+                
+                if (hasStreamingAI) {
+                  // 스트리밍 중인 AI 메시지가 있으면 서버 데이터와 병합
+                  const streamingMessage = currentMessages.find(msg => 
+                    msg.type === 'assistant' && msg.isStreaming && msg.id === currentAssistantMessageId.current
+                  );
+                  
+                  console.log("🔄 스트리밍 중인 AI 메시지 보존:", {
+                    streamingMessageId: streamingMessage?.id,
+                    streamingContent: streamingMessage?.content?.substring(0, 50) + "...",
+                    serverMessagesCount: processedMessages.length
+                  });
+                  
+                  // 서버 메시지 + 현재 스트리밍 메시지 병합
+                  return [...processedMessages, streamingMessage];
+                } else {
+                  // 스트리밍 중인 메시지가 없으면 서버 데이터로 교체
+                  console.log("📥 스트리밍 없음, 서버 데이터로 교체");
+                  return processedMessages;
+                }
+              });
               
               // 서버에서 가져온 데이터를 캐시에 저장
               const cacheKey = `conv:${loadConversationId}`;
@@ -232,7 +266,7 @@ const ChatPage = ({
           })
           .finally(() => {
             setIsLoadingConversation(false);
-            setTimeout(() => setIsInitialLoad(false), 100);
+            setTimeout(() => setIsLoadingConversation(false), 100);
           });
     } else if (!loadConversationId) {
       // 새 대화인 경우
@@ -240,7 +274,6 @@ const ChatPage = ({
       setCurrentConversationId(newConversationId);
       setMessages([]);
       setIsLoadingConversation(false);
-      setTimeout(() => setIsInitialLoad(false), 100);
     }
   }, [urlConversationId, location.pathname]); // URL 변경 감지
   const [currentMessage, setCurrentMessage] = useState("");
@@ -829,28 +862,38 @@ const ChatPage = ({
               
               console.log("✅ WebSocket 연결 확인됨, 메시지 전송 시작");
               
-              // 이미 messages에 사용자 메시지가 있는 경우 사용
-              const existingUserMessage = messages.find(m => m.type === 'user' && m.content === initialMessage);
+              // 🔑 개선된 중복 체크: 현재 messages 상태에서 동일한 내용의 사용자 메시지 확인
+              let userMessage = null;
+              const userMessageRef = { current: null };
               
-              let userMessage;
-              if (existingUserMessage) {
-                userMessage = existingUserMessage;
-                lastUserMessageRef.current = userMessage;
-                console.log("✅ 기존 사용자 메시지 사용:", userMessage);
-              } else {
-                // 사용자 메시지가 없는 경우에만 추가
-                const idempotencyKey = crypto.randomUUID();
-                userMessage = {
-                  id: crypto.randomUUID(),
-                  type: "user",
-                  content: initialMessage,
-                  timestamp: new Date(),
-                  idempotencyKey,
-                };
-                setMessages((prev) => [...prev, userMessage]);
-                lastUserMessageRef.current = userMessage;
-                console.log("➕ 새 사용자 메시지 추가:", userMessage);
-              }
+              setMessages((currentMessages) => {
+                const existingUserMessage = currentMessages.find(m => 
+                  m.type === 'user' && m.content === initialMessage
+                );
+                
+                if (existingUserMessage) {
+                  userMessageRef.current = existingUserMessage;
+                  console.log("✅ 기존 사용자 메시지 사용:", existingUserMessage);
+                  return currentMessages; // 변경 없이 현재 상태 유지
+                } else {
+                  // 사용자 메시지가 없는 경우에만 추가
+                  const idempotencyKey = crypto.randomUUID();
+                  const newUserMessage = {
+                    id: crypto.randomUUID(),
+                    type: "user",
+                    content: initialMessage,
+                    timestamp: new Date(),
+                    idempotencyKey,
+                  };
+                  userMessageRef.current = newUserMessage;
+                  console.log("➕ 새 사용자 메시지 추가:", newUserMessage);
+                  return [...currentMessages, newUserMessage];
+                }
+              });
+              
+              // ref에서 실제 사용자 메시지 참조 가져오기
+              userMessage = userMessageRef.current;
+              lastUserMessageRef.current = userMessage;
 
               // 스트리밍 상태 초기화 (AI 메시지는 ai_start에서 생성됨)
               streamingContentRef.current = "";
@@ -873,7 +916,7 @@ const ChatPage = ({
                     selectedEngine,
                     [],
                     currentConversationId,
-                    userMessage.idempotencyKey
+                    userMessage?.idempotencyKey || crypto.randomUUID()
                   );
                   sendSuccess = true;
                   console.log("✅ Initial message 전송 완료");
