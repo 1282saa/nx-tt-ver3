@@ -1,7 +1,8 @@
 // 대화 저장 및 관리 서비스
 
 // Conversation API 엔드포인트 - Lambda Function URL 사용
-const API_BASE_URL =
+// 환경 변수를 사용하거나 기본값 사용
+const API_BASE_URL = import.meta.env.VITE_API_URL || 
   "https://2zzb4h3d3gnua4v47zsoboa3ya0fwrnz.lambda-url.us-east-1.on.aws";
 
 class ConversationService {

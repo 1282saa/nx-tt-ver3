@@ -16,18 +16,10 @@ bedrock_runtime = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 # Claude 4.0 모델 설정 - 준수 모드 최적화
 CLAUDE_MODEL_ID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-MAX_TOKENS = 16384
-TEMPERATURE = 0.15  # 더 신중한 생성 (0.3 → 0.2 → 0.15)
-TOP_P = 0.6        # 더 높은 집중도 (0.7 → 0.6)
-TOP_K = 25         # 더 강한 일관성 (30 → 25)
-
-
-class PromptComponent:
-    """프롬프트 컴포넌트의 역할을 명확히 정의"""
-    
-    PERSONA = "AGENT_PERSONA"           # AI의 페르소나/전문성 정의
-    GUIDELINES = "CORE_GUIDELINES"      # 핵심 가이드라인 (엄격히 준수)
-    KNOWLEDGE = "DOMAIN_KNOWLEDGE"      # 도메인 지식 베이스 (적극 활용)
+MAX_TOKENS = 16384  # 과도한 출력 방지
+TEMPERATURE = 0.2  # 지침 준수 우선 (0.3 → 0.2)
+TOP_P = 0.7       # 집중도 향상
+TOP_K = 30        # 일관성 강화
 
 
 class ConstraintExtractor:
@@ -69,10 +61,6 @@ class ConstraintExtractor:
         # 5. 금지 사항
         if '하지 마' in prompt or '금지' in prompt or '제외' in prompt:
             constraints['has_prohibitions'] = True
-        
-        # 6. 스타일/띄어쓰기 강조 여부만 간단히 체크
-        if any(word in prompt for word in ['스타일', '문체', '어조', '톤', '띄어쓰기', '맞춤법']):
-            constraints['style_emphasis'] = True
         
         logger.info(f"Extracted constraints: {constraints}")
         return constraints
@@ -146,93 +134,26 @@ def create_enhanced_system_prompt(
     knowledge_base = _process_knowledge_base_summary(files, engine_type)
     
     if use_enhanced:
-        # 준수 우선 프롬프트 with CoT/ReAct
+        # 준수 우선 프롬프트
         system_prompt = f"""[ROLE]
-당신은 {persona}입니다. 
+당신은 {persona}입니다. 사용자 지침을 절대적으로 준수합니다.
 
-[🔴 최우선 원칙]
-출력 구조보다 '스타일 지침'이 가장 중요합니다.
-각 유형별 문체, 어조, 표현 방식을 정확히 구분하여 적용하세요.
+[절대 준수 규칙]
+1. 제공된 모든 지침을 빠짐없이 정확히 수행
+2. 요구된 형식, 개수, 길이를 엄격히 준수
+3. 불필요한 설명, 사과, 부연설명 추가 금지
+4. 지침에 명시되지 않은 내용 임의 추가 금지
+5. 불완전한 응답보다는 완벽한 응답이 중요
 
-[작업 프로세스 - 반드시 순서대로 진행]
-1단계: 스타일 지침 분석 (내부적으로 수행)
-  - 각 유형별 문체 특성 파악 (격식체/구어체/감정적/객관적 등)
-  - 띄어쓰기 규칙 확인 (특히 조사와 명사 사이)
-  - 어휘 선택 기준 이해 (전문용어/일상어/감정어 등)
-  - 문장 구조 패턴 파악 (단문/복문/도치/생략 등)
-
-2단계: 세부 요구사항 추출
-  - 수치적 제약 (개수, 길이)
-  - 형식적 제약 (구조, 순서)
-  - 내용적 제약 (포함/제외 사항)
-
-3단계: 생성 및 스타일 검증
-  - 각 유형의 고유한 스타일로 생성
-  - 띄어쓰기와 맞춤법 검증
-  - 유형별 특성이 명확히 드러나는지 확인
-
-[핵심 지침 - 한 글자도 놓치지 말고 정확히 읽으세요]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[핵심 지침]
 {guidelines}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[중요: 각 유형/카테고리별 차별화 원칙]
-지침에서 여러 유형이나 카테고리를 요구한다면:
-• 각 유형은 완전히 다른 문체와 어조를 사용하세요
-• 같은 표현이나 어휘를 반복하지 마세요
-• 각 유형의 고유한 특성을 살려 차별화하세요
-
-[문체 차별화 기법]
-• 공식적 ↔ 구어적: 격식체와 일상어의 대비
-• 객관적 ↔ 감정적: 사실 중심과 감정 자극의 대비
-• 간결함 ↔ 설명적: 핵심만 vs 상세한 설명
-• 직설적 ↔ 은유적: 직접 표현 vs 비유/메타포
-
-[창의적 표현 기법 - 적극 활용]
-• 시간 확장: 과거-현재-미래를 연결하는 표현
-• 대조법: 상반된 개념을 병치 (A vs B, A일까 B일까)
-• 메타포: 추상적 개념을 구체적 사물로 비유
-• 스토리텔링: 이야기 구조로 흥미 유발
-• 의문/감탄: 질문이나 감탄으로 호기심 자극
-
-[절대 하지 말아야 할 것들 - 스타일 위반]
-❌ 모든 유형을 비슷한 문체로 생성
-  나쁜 예: 모든 유형이 "~한다", "~했다"로 끝남
-  나쁜 예: 모든 유형에 "주목", "화제", "논란" 같은 단어 반복
-❌ 같은 표현이나 구조 반복
-  나쁜 예: "A의 B", "A의 B", "A의 B" 연속 사용
-  나쁜 예: "~발표", "~공개", "~선언" 같은 비슷한 종결
-❌ 유형별 특성 무시
-  나쁜 예: 객관적이어야 할 곳에 "충격", "발칵" 사용
-  나쁜 예: 감정적이어야 할 곳에 딱딱한 공식 용어만 사용
-❌ 애매모호한 표현
-  나쁜 예: "본격", "주목", "화제" 같은 구체성 없는 표현
-❌ 창의성 부족
-  나쁜 예: 단순 사실 나열만 하고 흥미 요소 없음
-
-[반드시 해야 할 것들 - 스타일 준수]
-✅ 각 유형의 고유한 문체와 어조 적용
-  좋은 예: 공식적 "발표했다" vs 구어적 "던졌다"
-  좋은 예: 객관적 "공식화" vs 감정적 "술렁"
-✅ 다양한 문장 종결 방식
-  좋은 예: 평서문, 의문문(...왜?), 인용문("...")혼합
-✅ 창의적 표현 활용
-  좋은 예: "3장의 카드", "딜레마", "숨통" 같은 메타포
-  좋은 예: "벤처→코스닥→코스피" 같은 시간 확장
-✅ 구체적이고 생생한 어휘
-  좋은 예: "술렁" > "논란", "발칵" > "화제"
-  좋은 예: "버리고" > "이전", "던졌다" > "발표"
-✅ 각 유형이 마치 다른 사람이 쓴 것처럼 차별화
 
 {knowledge_base if knowledge_base else ""}
 
-[자체 검증 체크리스트]
+[내부 체크리스트] (응답 전 자체 점검)
 """
         
         # 제약 조건별 체크리스트 추가
-        if constraints.get('style_emphasis'):
-            system_prompt += "✓ 각 유형별로 스타일과 어조가 확연히 다른가?\n"
-            system_prompt += "✓ 띄어쓰기와 맞춤법이 완벽한가?\n"
         if 'exact_count' in constraints:
             system_prompt += f"✓ 정확히 {constraints['exact_count']}개 생성했는가?\n"
         if 'char_range' in constraints:
@@ -254,11 +175,6 @@ def create_enhanced_system_prompt(
     
     logger.info(f"System prompt created with strict compliance mode: {len(system_prompt)} chars")
     return system_prompt
-
-
-def _process_knowledge_base(files: List[Dict], engine_type: str) -> str:
-    """지식베이스를 체계적으로 구성 (기존 호환성 유지)"""
-    return _process_knowledge_base_summary(files, engine_type, max_files=5, max_chars=1000)
 
 
 def _process_knowledge_base_summary(files: List[Dict], engine_type: str, max_files: int = 3, max_chars: int = 500) -> str:
@@ -300,151 +216,28 @@ def _format_knowledge_base_basic(files: List[Dict]) -> str:
     return '\n'.join(contexts)
 
 
-def _process_file_contexts(files: List[Dict]) -> str:
-    """파일 컨텍스트를 구조화하여 처리"""
-    if not files:
-        return ""
-    
-    contexts = []
-    contexts.append("\n### 제공된 참조 자료:")
-    
-    for idx, file in enumerate(files[:3], 1):  # 최대 3개로 제한
-        file_name = file.get('fileName', f'문서_{idx}')
-        file_content = file.get('fileContent', '')[:500]  # 500자로 제한
-        file_type = file.get('fileType', 'text')
-        
-        if file_content.strip():
-            contexts.append(f"""
-#### [{idx}] {file_name}
-- 유형: {file_type}
-- 내용:
-{file_content}""")
-    
-    contexts.append("\n**참조 자료 활용 지침**: 위 자료를 필요에 따라 참조하되, 주어진 지침을 우선시하세요.")
-    
-    return '\n'.join(contexts)
-
-
-def _format_file_contexts_basic(files: List[Dict]) -> str:
-    """기본 파일 컨텍스트 포맷팅"""
-    if not files:
-        return ""
-    
-    contexts = ["\n=== 참조 자료 ==="]
-    for file in files[:3]:  # 최대 3개로 제한
-        file_name = file.get('fileName', 'unknown')
-        file_content = file.get('fileContent', '')[:500]  # 500자로 제한
-        if file_content.strip():
-            contexts.append(f"\n[{file_name}]")
-            contexts.append(file_content.strip())
-    
-    return '\n'.join(contexts)
-
-
-def create_user_message_with_anchoring(
-    user_message: str,
-    response_format: Optional[str] = None,
-    examples: Optional[List[str]] = None
-) -> str:
-    """
-    Response Anchoring을 활용한 사용자 메시지 구성
-    응답의 시작 부분이나 구조를 제공하여 모델의 응답을 유도
-    """
-    enhanced_message = user_message
-    
-    # 예시 추가 (Few-shot learning)
-    if examples:
-        enhanced_message = f"""다음은 참고할 수 있는 예시입니다:
-{chr(10).join(f'예시 {i+1}: {ex}' for i, ex in enumerate(examples))}
-
-이제 다음 질문에 답해주세요:
-{user_message}"""
-    
-    # 응답 형식 앵커링
-    if response_format:
-        enhanced_message += f"\n\n응답 형식:\n{response_format}"
-    
-    return enhanced_message
-
-
-def create_user_message_with_constraints(
-    user_message: str,
-    constraints: Dict[str, Any]
-) -> str:
-    """제약 조건을 명시적으로 포함한 사용자 메시지 생성 with CoT"""
-    # CoT 사고 과정 유도
-    enhanced_message = f"""[작업 시작]
-먼저 내부적으로 다음을 수행하세요:
-1. 제공된 지침을 천천히 3번 읽기
-2. 각 유형별 스타일과 문체 특성 정리
-3. 띄어쓰기 규칙 확인 (조사는 앞 단어에 붙여쓰기)
-4. 제약사항 확인 (개수, 길이, 형식 등)
-5. 생성 후 스타일 차별성과 띄어쓰기 검증
-
-이제 아래 요청을 처리하세요:
-{user_message}"""
-    
-    if constraints:
-        constraint_text = "\n\n[반드시 지켜야 할 제약사항]"
-        if 'exact_count' in constraints:
-            constraint_text += f"\n✓ 정확히 {constraints['exact_count']}개 생성 (더도 말고 덜도 말고)"
-        if 'char_range' in constraints:
-            constraint_text += f"\n✓ 각 항목 {constraints['char_range'][0]}-{constraints['char_range'][1]}자 (공백 포함)"
-        if 'format' in constraints:
-            constraint_text += f"\n✓ {constraints['format']} 형식 엄격히 준수"
-        
-        enhanced_message += constraint_text
-    
-    return enhanced_message
-
-
-def validate_instruction_compliance(
-    response: str,
-    original_instruction: str,
-    validation_keywords: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """
-    응답 검증 - 개선된 버전
-    """
-    constraints = ConstraintExtractor.extract(original_instruction)
-    is_valid, error_msg = ResponseValidator.validate(response, constraints)
-    
-    validation_result = {
-        "response_length": len(response),
-        "has_content": bool(response.strip()),
-        "is_compliant": is_valid,
-        "validation_errors": error_msg,
-        "extracted_constraints": constraints
-    }
-    
-    # 선택적 키워드 체크 (필요시만)
-    if validation_keywords:
-        found_keywords = [kw for kw in validation_keywords if kw.lower() in response.lower()]
-        validation_result["found_keywords"] = found_keywords
-    
-    return validation_result
-
-
 def stream_claude_response_enhanced(
     user_message: str,
     system_prompt: str,
-    use_cot: bool = True,   # CoT 활성화로 변경 (꼼꼼한 처리)
+    use_cot: bool = False,  # 기본값 False로 변경
     max_retries: int = 2,   # 재시도 횟수 증가
     validate_constraints: bool = True  # 검증 활성화
 ) -> Iterator[str]:
     """
     향상된 Claude 스트리밍 응답 생성 - 검증 및 재시도 포함
     """
-    # CoT 적용 시 메시지 강화
-    if use_cot and validate_constraints:
+    # Chain-of-Thought는 기본적으로 비활성화
+    # (장황한 설명 방지, 지침 준수에 집중)
+    
+    messages = [{"role": "user", "content": user_message}]
+    
+    # 제약 조건 추출 (검증용)
+    constraints = {}
+    if validate_constraints:
         constraints = ConstraintExtractor.extract(system_prompt + " " + user_message)
-        enhanced_message = create_user_message_with_constraints(user_message, constraints)
-        messages = [{"role": "user", "content": enhanced_message}]
-    else:
-        messages = [{"role": "user", "content": user_message}]
-        constraints = {}
-        if validate_constraints:
-            constraints = ConstraintExtractor.extract(system_prompt + " " + user_message)
+    
+    best_response = ""
+    best_score = 0
     
     for attempt in range(max_retries + 1):
         try:
@@ -526,33 +319,25 @@ def stream_claude_response_enhanced(
                 time.sleep(1)
 
 
-def get_prompt_effectiveness_metrics(
-    prompt_data: Dict[str, Any],
-    response: str
-) -> Dict[str, Any]:
-    """
-    프롬프트 효과성 메트릭 측정 - 개선된 버전
-    """
-    constraints = ConstraintExtractor.extract(
-        prompt_data.get('prompt', {}).get('instruction', '')
-    )
+def create_user_message_with_constraints(
+    user_message: str,
+    constraints: Dict[str, Any]
+) -> str:
+    """제약 조건을 명시적으로 포함한 사용자 메시지 생성"""
+    enhanced_message = user_message
     
-    is_valid, error_msg = ResponseValidator.validate(response, constraints)
+    if constraints:
+        constraint_text = "\n\n[준수 사항]"
+        if 'exact_count' in constraints:
+            constraint_text += f"\n- 정확히 {constraints['exact_count']}개 생성"
+        if 'char_range' in constraints:
+            constraint_text += f"\n- 각 항목 {constraints['char_range'][0]}-{constraints['char_range'][1]}자"
+        if 'format' in constraints:
+            constraint_text += f"\n- {constraints['format']} 형식으로 출력"
+        
+        enhanced_message += constraint_text
     
-    metrics = {
-        "prompt_length": len(str(prompt_data)),
-        "response_length": len(response),
-        "has_description": bool(prompt_data.get('prompt', {}).get('description')),
-        "has_instructions": bool(prompt_data.get('prompt', {}).get('instruction')),
-        "file_count": len(prompt_data.get('files', [])),
-        "estimated_tokens": len(response.split()) * 1.3,
-        "timestamp": datetime.now().isoformat(),
-        "compliance_rate": 1.0 if is_valid else 0.0,
-        "validation_errors": error_msg,
-        "extracted_constraints": constraints
-    }
-    
-    return metrics
+    return enhanced_message
 
 
 # 기존 함수와의 호환성 유지
@@ -566,7 +351,7 @@ def stream_claude_response(user_message: str, system_prompt: str) -> Iterator[st
     return stream_claude_response_enhanced(user_message, system_prompt, validate_constraints=True)
 
 
-# 메트릭 수집 함수 (추가)
+# 메트릭 수집 함수
 def get_compliance_metrics(
     prompt_data: Dict[str, Any],
     response: str
