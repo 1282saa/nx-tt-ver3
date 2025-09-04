@@ -8,10 +8,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  */
 export const useSmoothStreaming = (options = {}) => {
   const {
-    charDelay = 4,           // 글자 간 기본 딜레이 (ms) - 초고속
-    minDelay = 1,            // 최소 딜레이 - 극한의 속도
-    maxDelay = 8,            // 최대 딜레이 (구두점 등) - 짧게
-    smoothness = 0.98,       // 부드러움 정도 (0-1) - 최대
+    charDelay = 8,           // 글자 간 기본 딜레이 (ms) - 적당한 타이핑 속도
+    minDelay = 2,            // 최소 딜레이 - 빠른 부분
+    maxDelay = 20,           // 최대 딜레이 (구두점 등) - 자연스러운 멈춤
+    smoothness = 0.95,       // 부드러움 정도 (0-1) - 자연스러운 변화
   } = options;
 
   const [displayText, setDisplayText] = useState('');
@@ -25,23 +25,29 @@ export const useSmoothStreaming = (options = {}) => {
 
   // 글자별 딜레이 계산 (더 최적화)
   const getCharDelay = useCallback((char, nextChar) => {
-    // 마침표 다음 공백이면 긴 멈춤
-    if (char === '.' && nextChar === ' ') {
-      return maxDelay * 1.5;
+    // 마침표, 느낌표, 물음표 다음이면 긴 멈춤
+    if (['.', '!', '?'].includes(char) && nextChar === ' ') {
+      return maxDelay * 2; // 문장 끝에서 더 긴 멈춤
     }
     
-    // 일반 구두점
-    if ([',', '、', '·'].includes(char)) {
-      return maxDelay * 0.8;
+    // 일반 구두점 (쉼표, 가운뎃점 등)
+    if ([',', '、', '·', ':', ';'].includes(char)) {
+      return maxDelay * 1.2;
     }
     
-    // 공백이나 숫자는 빠르게
-    if (char === ' ' || /[0-9]/.test(char)) {
-      return minDelay;
+    // 공백은 짧게
+    if (char === ' ') {
+      return minDelay * 1.5;
     }
     
-    // 한글/영어 일반 글자
-    return charDelay;
+    // 숫자나 특수문자는 약간 빠르게
+    if (/[0-9\-\+\=\(\)]/.test(char)) {
+      return charDelay * 0.7;
+    }
+    
+    // 한글/영어 일반 글자 - 약간의 랜덤성 추가
+    const variation = 0.8 + Math.random() * 0.4; // 0.8 ~ 1.2 배 변화
+    return charDelay * variation;
   }, [charDelay, minDelay, maxDelay]);
 
   // 부드러운 애니메이션 루프

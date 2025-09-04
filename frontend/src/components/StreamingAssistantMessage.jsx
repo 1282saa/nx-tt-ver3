@@ -28,10 +28,10 @@ const StreamingAssistantMessage = memo(
   }) => {
     const { displayText, isStreaming, appendText, finish, reset } =
       useSmoothStreaming({
-        charDelay: 2, // 기본 2ms/글자 (초당 약 500글자)
-        minDelay: 0.5, // 최소 0.5ms (극한 속도)
-        maxDelay: 4, // 최대 4ms (구두점도 더 빠르게)
-        smoothness: 0.99, // 극도로 부드럽게
+        charDelay: 18,    // 기본 18ms/글자 (사람이 타이핑하는 듯한 속도)
+        minDelay: 5,      // 최소 5ms (빠른 부분)
+        maxDelay: 50,     // 최대 50ms (구두점에서 자연스러운 멈춤)
+        smoothness: 0.88, // 약간의 속도 변화로 자연스럽게
       });
 
     const lastContentRef = useRef("");

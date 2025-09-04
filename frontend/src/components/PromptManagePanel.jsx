@@ -316,7 +316,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
         >
           <div
             role="dialog"
-            className="flex flex-col focus:outline-none relative text-text-100 text-left shadow-xl border-0.5 rounded-2xl md:p-6 p-4 align-middle min-w-0 w-full max-w-3xl animate-[zoom_250ms_ease-in_forwards]"
+            className="flex flex-col focus:outline-none relative text-text-100 text-left shadow-xl border-0.5 rounded-2xl md:p-6 p-4 align-middle min-w-0 w-full max-w-3xl max-h-[85vh] animate-[zoom_250ms_ease-in_forwards]"
             style={{
               backgroundColor: "hsl(var(--bg-100))",
               borderColor: "hsl(var(--border-300)/0.15)",
@@ -324,7 +324,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
             }}
             tabIndex="-1"
           >
-            <div className="min-h-full">
+            <div className="flex flex-col h-full overflow-y-auto max-h-[calc(85vh-6rem)]">
               <div className="flex flex-col gap-1">
                 <h2 className="font-xl-bold">{engineType} 엔진 지침 설정</h2>
                 <p className="text-text-300 text-sm">
@@ -387,7 +387,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
         >
           <div
             role="dialog"
-            className="flex flex-col focus:outline-none relative text-text-100 text-left shadow-xl border-0.5 rounded-2xl align-middle min-w-0 p-7 pt-6 w-full max-w-3xl animate-[zoom_250ms_ease-in_forwards]"
+            className="flex flex-col focus:outline-none relative text-text-100 text-left shadow-xl border-0.5 rounded-2xl align-middle min-w-0 p-7 pt-6 w-full max-w-3xl max-h-[85vh] animate-[zoom_250ms_ease-in_forwards]"
             style={{
               backgroundColor: "hsl(var(--bg-100))",
               borderColor: "hsl(var(--border-300)/0.15)",
@@ -395,7 +395,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
             }}
             tabIndex="-1"
           >
-            <div className="min-h-full">
+            <div className="flex flex-col h-full overflow-y-auto max-h-[calc(85vh-6rem)]">
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -555,7 +555,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
         >
           <div
             role="dialog"
-            className="flex flex-col focus:outline-none relative text-text-100 text-left shadow-xl border-0.5 rounded-2xl md:p-6 p-4 align-middle min-w-0 w-full max-w-3xl animate-[zoom_250ms_ease-in_forwards]"
+            className="flex flex-col focus:outline-none relative text-text-100 text-left shadow-xl border-0.5 rounded-2xl md:p-6 p-4 align-middle min-w-0 w-full max-w-3xl max-h-[85vh] animate-[zoom_250ms_ease-in_forwards]"
             style={{
               backgroundColor: "hsl(var(--bg-100))",
               borderColor: "hsl(var(--border-300)/0.15)",
@@ -563,7 +563,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
             }}
             tabIndex="-1"
           >
-            <div className="min-h-full flex flex-col">
+            <div className="flex flex-col h-full overflow-hidden">
               <div className="flex items-center gap-4 justify-between">
                 <h2 className="font-xl-bold text-text-100 flex w-full min-w-0 items-center leading-6 break-words">
                   <span className="[overflow-wrap:anywhere]">
@@ -630,7 +630,7 @@ const PromptManagePanel = ({ engineType = "T5" }) => {
               </p>
 
               <div
-                className="rounded-lg border-0.5 shadow-sm whitespace-pre-wrap break-all text-xs p-4 font-mono"
+                className="rounded-lg border-0.5 shadow-sm whitespace-pre-wrap break-all text-xs p-4 font-mono overflow-y-auto flex-1 min-h-0"
                 style={{
                   backgroundColor: "hsl(var(--bg-000))",
                   borderColor: "hsl(var(--border-300)/0.15)",

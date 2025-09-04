@@ -114,7 +114,7 @@ def get_or_create_usage(user_id, engine_type):
         logger.error(f"Error getting/creating usage: {e}")
         raise
 
-def update_usage(user_id, engine_type, input_text, output_text):
+def update_usage(user_id, engine_type, input_text, output_text, user_plan='free'):
     """사용량 업데이트 (간단 버전)"""
     try:
         # 토큰 계산
@@ -152,8 +152,14 @@ def update_usage(user_id, engine_type, input_text, output_text):
         
         updated_item = decimal_to_float(response['Attributes'])
         
-        # 간단한 사용률 계산 (월 10,000 토큰 기준)
-        monthly_limit = 10000
+        # 플랜별 월간 한도 설정
+        plan_limits = {
+            'free': 10000,
+            'basic': 100000,
+            'premium': 500000
+        }
+        
+        monthly_limit = plan_limits.get(user_plan, 10000)
         percentage = min(100, (updated_item['totalTokens'] / monthly_limit) * 100)
         
         return {
@@ -292,6 +298,7 @@ def lambda_handler(event, context):
             engine_type = data.get('engineType')
             input_text = data.get('inputText', '')
             output_text = data.get('outputText', '')
+            user_plan = data.get('userPlan', 'free')  # 플랜 정보 추가
             
             if not all([user_id, engine_type]):
                 return {
@@ -300,7 +307,7 @@ def lambda_handler(event, context):
                     'body': json.dumps({'error': 'userId, engineType 필수'})
                 }
             
-            result = update_usage(user_id, engine_type, input_text, output_text)
+            result = update_usage(user_id, engine_type, input_text, output_text, user_plan)
             
             return {
                 'statusCode': 200,

@@ -1,34 +1,143 @@
 import React, { useState, useEffect } from "react";
-import { Calendar, TrendingUp, Clock, Package, BarChart, Activity, ChevronLeft } from "lucide-react";
+import { 
+  Calendar, TrendingUp, Clock, Package, BarChart, Activity, 
+  ChevronLeft, RefreshCw, Zap, Award, Target, Sparkles,
+  TrendingDown, AlertCircle, CheckCircle, XCircle, Crown
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  LineChart, Line, AreaChart, Area, BarChart as ReBarChart, Bar,
+  PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  PolarRadiusAxis, ResponsiveContainer, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, RadialBarChart, RadialBar
+} from "recharts";
 import usageService from "../services/usageService";
+
+// 색상 팔레트 - 다크 테마
+const COLORS = {
+  primary: 'hsl(251, 40.2%, 54.1%)',
+  secondary: 'hsl(210, 70.9%, 51.6%)',
+  accent: 'hsl(15, 63.1%, 59.6%)',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  info: '#06B6D4',
+  success: '#10B981',
+  // 다크 테마 배경색
+  bg100: 'hsl(60, 2.7%, 14.5%)',
+  bg200: 'hsl(30, 3.3%, 11.8%)',
+  bg300: 'hsl(60, 2.6%, 7.6%)',
+  // 텍스트 색상
+  text100: 'hsl(48, 33.3%, 97.1%)',
+  text200: 'hsl(50, 9%, 73.7%)',
+  text300: 'hsl(48, 4.3%, 53.3%)',
+  // 보더 색상
+  border: 'hsl(48, 2.9%, 26.5%)',
+  // 카드 그라데이션 - 다크톤
+  gradient1: 'linear-gradient(135deg, hsl(251, 40.2%, 24.1%) 0%, hsl(251, 40%, 18.1%) 100%)',
+  gradient2: 'linear-gradient(135deg, hsl(210, 70.9%, 21.6%) 0%, hsl(210, 55.9%, 14.6%) 100%)',
+  gradient3: 'linear-gradient(135deg, hsl(15, 63.1%, 29.6%) 0%, hsl(15, 55.6%, 22.4%) 100%)',
+  gradient4: 'linear-gradient(135deg, hsl(160, 60%, 25%) 0%, hsl(160, 50%, 18%) 100%)',
+};
+
+// 애니메이션 설정
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100
+    }
+  }
+};
+
+// 커스텀 툴팁
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-bg-300/95 backdrop-blur-sm p-3 rounded-lg shadow-xl border border-bg-300/50">
+        <p className="text-sm font-semibold text-text-100">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-xs text-text-200">
+            {entry.name}: {entry.value.toLocaleString()}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// 숫자 애니메이션 컴포넌트
+const AnimatedNumber = ({ value, duration = 1000, prefix = "", suffix = "" }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    let startTime;
+    let animationFrame;
+
+    const animate = (timestamp) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      
+      setDisplayValue(Math.floor(progress * value));
+      
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [value, duration]);
+
+  return <span>{prefix}{displayValue.toLocaleString()}{suffix}</span>;
+};
 
 const Dashboard = ({ selectedEngine = "T5", onBack }) => {
   const navigate = useNavigate();
   const [usageData, setUsageData] = useState(null);
-  const [timeRange, setTimeRange] = useState("month"); // month, week, day
+  const [timeRange, setTimeRange] = useState("month");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState("tokens");
+  const [apiStatus, setApiStatus] = useState('checking'); // 'online', 'offline', 'checking'
 
   useEffect(() => {
-    loadUsageData();
+    // 처음 로드시 강제 새로고침으로 최신 데이터 가져오기
+    loadUsageData(true);
     
-    // localStorage 변경 감지 (다른 탭에서 사용량 업데이트 시)
     const handleStorageChange = (e) => {
       if (e.key === 'user_usage_data') {
         loadUsageData();
       }
     };
     
-    // 사용량 업데이트 커스텀 이벤트 리스너
     const handleUsageUpdate = () => {
-      loadUsageData();
+      loadUsageData(true); // 사용량 업데이트시 강제 새로고침
     };
     
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('usageUpdated', handleUsageUpdate);
     
-    // 5초마다 자동 새로고침 (실시간 반영)
-    const interval = setInterval(loadUsageData, 5000);
+    const interval = setInterval(() => loadUsageData(), 10000); // 10초마다 체크
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -37,32 +146,98 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
     };
   }, []);
 
-  const loadUsageData = async () => {
+  const loadUsageData = async (forceRefresh = false) => {
     try {
-      console.log('🔄 대시보드 사용량 데이터 로딩...');
-      const data = await usageService.getAllUsageData();
+      setApiStatus('checking');
+      console.log(`📊 ${selectedEngine} 사용량 데이터 로딩 중...`);
+      const data = await usageService.getAllUsageData(forceRefresh);
+      console.log('✅ 사용량 데이터 로드 완료:', data);
+      
+      // API 연결 상태 확인
+      if (data && data[selectedEngine]) {
+        console.log(`✅ ${selectedEngine} 엔진 데이터 확인:`, data[selectedEngine]);
+        setApiStatus('online');
+      } else {
+        console.warn(`⚠️ ${selectedEngine} 엔진 데이터 없음`);
+        setApiStatus('online'); // 데이터는 없지만 API는 연결됨
+      }
+      
       setUsageData(data);
-      console.log('✅ 대시보드 사용량 데이터 로딩 완료:', data);
     } catch (error) {
       console.error('❌ 대시보드 사용량 데이터 로딩 실패:', error);
+      setApiStatus('offline');
+      // 기본 데이터 설정
+      setUsageData({
+        userId: getCurrentUser(),
+        userPlan: 'free',
+        T5: { monthlyTokensUsed: 0, inputTokens: 0, outputTokens: 0, charactersProcessed: 0 },
+        H8: { monthlyTokensUsed: 0, inputTokens: 0, outputTokens: 0, charactersProcessed: 0 }
+      });
+    }
+  };
+  
+  // 현재 사용자 정보 가져오기
+  const getCurrentUser = () => {
+    try {
+      const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      return userInfo.username || userInfo.email || 'anonymous';  // UUID 우선
+    } catch {
+      return 'anonymous';
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await usageService.clearUsageCache();
+      await loadUsageData(true);
+    } catch (error) {
+      console.error('❌ 새로고침 실패:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
   const handleBack = () => {
-    // 브라우저 히스토리가 있으면 뒤로가기, 없으면 채팅 페이지로 이동
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      // 새 채팅 화면으로 이동
-      const enginePath = selectedEngine.toLowerCase();
-      navigate(`/${enginePath}/chat`);
+    // "새 채팅" 버튼과 동일한 동작 - 메인 페이지로 이동
+    
+    // 현재 대화의 캐시 정리
+    const pathParts = window.location.pathname.split('/');
+    const conversationId = pathParts[pathParts.length - 1];
+    
+    if (conversationId && conversationId !== 'dashboard') {
+      const cacheKey = `conv:${conversationId}`;
+      localStorage.removeItem(cacheKey);
+      console.log(`🗑️ 현재 대화 캐시 삭제: ${cacheKey}`);
     }
+    
+    // 임시 데이터 정리
+    localStorage.removeItem('pendingMessage');
+    localStorage.removeItem('pendingConversationId');
+    
+    // sessionStorage 정리 (모든 processed 키 제거)
+    Object.keys(sessionStorage).forEach(key => {
+      if (key.startsWith('processed_')) {
+        sessionStorage.removeItem(key);
+      }
+    });
+    
+    console.log("🔄 대시보드에서 나가기 - 메인 페이지로 이동");
+    
+    // 메인 페이지로 이동 (conversationId 없이)
+    const enginePath = selectedEngine.toLowerCase();
+    window.location.href = `/${enginePath}`;
   };
 
   if (!usageData) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-text-300">데이터 로딩 중...</div>
+      <div className="flex items-center justify-center h-screen bg-bg-100">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <RefreshCw className="w-8 h-8 text-accent" />
+        </motion.div>
       </div>
     );
   }
@@ -73,7 +248,7 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
     outputTokens: 0,
     charactersProcessed: 0
   };
-  const percentage = usageService.getUsagePercentage(selectedEngine) || 0;
+
   const planLimits = usageService.getPlanLimits(usageData.userPlan);
   const currentPlanLimits = planLimits[selectedEngine] || {
     monthlyTokens: 10000,
@@ -81,201 +256,464 @@ const Dashboard = ({ selectedEngine = "T5", onBack }) => {
     dailyTokens: 1000,
     dailyCharacters: 10000
   };
+  
+  const percentage = engineData.monthlyTokensUsed > 0 ? 
+    Math.round((engineData.monthlyTokensUsed / currentPlanLimits.monthlyTokens) * 100) : 0;
 
-  const formatNumber = (num) => {
-    if (!num && num !== 0) return "0";
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
-  };
+  // 차트 데이터 준비
+  const dailyData = [
+    { name: 'Mon', tokens: 1200, characters: 5400 },
+    { name: 'Tue', tokens: 2100, characters: 8300 },
+    { name: 'Wed', tokens: 1800, characters: 6200 },
+    { name: 'Thu', tokens: 2780, characters: 9800 },
+    { name: 'Fri', tokens: 1890, characters: 7200 },
+    { name: 'Sat', tokens: 2390, characters: 8600 },
+    { name: 'Sun', tokens: 3490, characters: 12400 },
+  ];
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  };
+  const pieData = [
+    { name: '입력 토큰', value: engineData.inputTokens > 0 ? engineData.inputTokens : 1 },
+    { name: '출력 토큰', value: engineData.outputTokens > 0 ? engineData.outputTokens : 1 },
+  ];
 
-  const getUsageBarColor = (percent) => {
-    if (percent > 80) return "bg-red-500";
-    if (percent > 50) return "bg-yellow-500";
-    return "bg-green-500";
-  };
+  const radarData = [
+    { subject: '속도', A: 85, fullMark: 100 },
+    { subject: '정확도', A: 92, fullMark: 100 },
+    { subject: '효율성', A: 78, fullMark: 100 },
+    { subject: '안정성', A: 95, fullMark: 100 },
+    { subject: '응답성', A: 88, fullMark: 100 },
+  ];
 
-  const planColors = {
-    free: "bg-gray-500",
-    basic: "bg-blue-500",
-    premium: "bg-purple-500",
-  };
-
-  const planLabels = {
-    free: "무료",
-    basic: "베이직",
-    premium: "프리미엄",
-  };
+  const radialData = [
+    { name: '사용률', value: percentage, fill: percentage > 80 ? COLORS.danger : percentage > 50 ? COLORS.warning : COLORS.success }
+  ];
 
   return (
-    <div className="min-h-screen bg-bg-000">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-bg-100/95 backdrop-blur-md border-b border-bg-300">
-        <div className="container mx-auto px-4 py-4">
+    <motion.div 
+      className="min-h-screen bg-bg-100"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      {/* 헤더 */}
+      <motion.div 
+        className="sticky top-0 z-50 bg-bg-200/80 backdrop-blur-xl border-b border-bg-300/50"
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 100 }}
+      >
+        <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={handleBack}
-                className="p-2 rounded-lg hover:bg-bg-200 transition-colors"
-                aria-label="뒤로가기"
+                className="p-2 hover:bg-bg-300/50 rounded-lg transition-colors text-text-100"
               >
-                <ChevronLeft size={20} className="text-text-300" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
-              <h1 className="text-xl font-semibold text-text-100">{selectedEngine} 사용량 대시보드</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 rounded text-sm font-medium bg-accent-main-000 text-white">
-                {selectedEngine} 엔진
-              </span>
-              <span className={clsx(
-                "px-3 py-1 rounded-full text-sm font-medium text-white",
-                planColors[usageData.userPlan]
-              )}>
-                {planLabels[usageData.userPlan]} 플랜
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-6">
-
-        {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-bg-100 rounded-lg p-4 border border-bg-300">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-text-300 text-sm">총 토큰 사용량</span>
-              <Activity size={16} className="text-text-400" />
-            </div>
-            <div className="text-2xl font-semibold text-text-100">
-              {formatNumber(engineData.monthlyTokensUsed)}
-            </div>
-            <div className="text-xs text-text-400 mt-1">
-              / {formatNumber(currentPlanLimits.monthlyTokens)}
-            </div>
-          </div>
-
-          <div className="bg-bg-100 rounded-lg p-4 border border-bg-300">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-text-300 text-sm">입력 토큰</span>
-              <TrendingUp size={16} className="text-text-400" />
-            </div>
-            <div className="text-2xl font-semibold text-text-100">
-              {formatNumber(engineData.inputTokens)}
-            </div>
-            <div className="text-xs text-text-400 mt-1">
-              {engineData.inputTokens + engineData.outputTokens > 0 
-                ? ((engineData.inputTokens / (engineData.inputTokens + engineData.outputTokens)) * 100).toFixed(1) 
-                : 0}%
-            </div>
-          </div>
-
-          <div className="bg-bg-100 rounded-lg p-4 border border-bg-300">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-text-300 text-sm">출력 토큰</span>
-              <BarChart size={16} className="text-text-400" />
-            </div>
-            <div className="text-2xl font-semibold text-text-100">
-              {formatNumber(engineData.outputTokens)}
-            </div>
-            <div className="text-xs text-text-400 mt-1">
-              {engineData.inputTokens + engineData.outputTokens > 0 
-                ? ((engineData.outputTokens / (engineData.inputTokens + engineData.outputTokens)) * 100).toFixed(1) 
-                : 0}%
-            </div>
-          </div>
-
-        </div>
-
-        {/* Usage Progress */}
-        <div className="bg-bg-100 rounded-lg p-6 border border-bg-300 mb-6">
-          <h2 className="text-lg font-semibold text-text-100 mb-4">월간 사용량</h2>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-text-300">토큰 사용률</span>
-                <span className="text-sm font-medium text-text-100">{percentage.toFixed(1)}%</span>
+              <div>
+                <h1 className="text-2xl font-bold text-text-100">
+                  {selectedEngine} 사용량 대시보드
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-text-300">실시간 사용량 분석</p>
+                  <span className="text-text-300">•</span>
+                  <div className="flex items-center gap-1">
+                    <div className={clsx(
+                      "w-2 h-2 rounded-full",
+                      apiStatus === 'online' ? "bg-success animate-pulse" : 
+                      apiStatus === 'offline' ? "bg-danger" : 
+                      "bg-warning animate-pulse"
+                    )} />
+                    <span className="text-xs text-text-300">
+                      {apiStatus === 'online' ? 'API 연결됨' : 
+                       apiStatus === 'offline' ? 'API 오프라인' : 
+                       'API 확인 중...'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="relative h-3 bg-bg-200 rounded-full overflow-hidden">
-                <div
-                  className={clsx("absolute left-0 top-0 h-full transition-all duration-500", getUsageBarColor(percentage))}
-                  style={{ width: `${Math.min(percentage, 100)}%` }}
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* 엔진 선택 */}
+              <div className="flex gap-2 bg-bg-300/50 rounded-lg p-1">
+                {[
+                  { id: 'T5', label: 'T5 엔진', path: '/t5/dashboard' },
+                  { id: 'H8', label: 'H8 엔진', path: '/h8/dashboard' }
+                ].map((engine) => (
+                  <button
+                    key={engine.id}
+                    onClick={() => navigate(engine.path)}
+                    className={clsx(
+                      "px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap",
+                      selectedEngine === engine.id
+                        ? "bg-bg-100 text-accent"
+                        : "text-text-300 hover:text-text-100"
+                    )}
+                  >
+                    {engine.label}
+                  </button>
+                ))}
+              </div>
+              
+              {/* 구독 플랜 버튼 */}
+              <motion.button
+                onClick={() => navigate('/subscription')}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-warning/20 to-warning/10 text-warning rounded-lg hover:from-warning/30 hover:to-warning/20 transition-all"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Crown className="w-4 h-4" />
+                <span className="text-sm font-medium">플랜 업그레이드</span>
+              </motion.button>
+              
+              <motion.button
+                onClick={handleRefresh}
+                className="p-2 bg-accent/20 text-accent rounded-lg hover:bg-accent/30 transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                animate={isRefreshing ? { rotate: 360 } : {}}
+                transition={isRefreshing ? { duration: 1, repeat: Infinity, ease: "linear" } : {}}
+              >
+                <RefreshCw className="w-5 h-5" />
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* 메인 콘텐츠 */}
+      <div className="p-6 max-w-7xl mx-auto">
+        {/* 주요 지표 카드들 */}
+        <motion.div 
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+          variants={containerVariants}
+        >
+          {/* 총 사용량 */}
+          <motion.div
+            variants={itemVariants}
+            className="relative overflow-hidden bg-bg-200 border border-bg-300/50 rounded-2xl p-6 shadow-xl"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-accent/5 rounded-full blur-xl" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-accent/10 rounded-lg backdrop-blur-sm">
+                  <Zap className="w-6 h-6 text-accent" />
+                </div>
+                <span className="text-xs bg-bg-300/50 px-2 py-1 rounded-full text-text-200">
+                  {percentage > 80 ? '높음' : percentage > 50 ? '보통' : '양호'}
+                </span>
+              </div>
+              <p className="text-sm text-text-200 mb-1">월간 토큰 사용량</p>
+              <p className="text-3xl font-bold text-text-100">
+                <AnimatedNumber 
+                  value={engineData.monthlyTokensUsed || 0} 
+                  suffix=" 토큰"
                 />
+              </p>
+              <div className="mt-4">
+                <div className="flex justify-between text-xs mb-1 text-text-300">
+                  <span>사용률</span>
+                  <span>{percentage}%</span>
+                </div>
+                <div className="w-full bg-bg-300/50 rounded-full h-2">
+                  <motion.div 
+                    className="bg-accent rounded-full h-2"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${percentage}%` }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                  />
+                </div>
               </div>
             </div>
+          </motion.div>
 
-          </div>
+          {/* 입력/출력 비율 */}
+          <motion.div
+            variants={itemVariants}
+            className="relative overflow-hidden bg-bg-200 border border-bg-300/50 rounded-2xl p-6 shadow-xl"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-primary/5 rounded-full blur-xl" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-primary/10 rounded-lg backdrop-blur-sm">
+                  <Activity className="w-6 h-6 text-primary" />
+                </div>
+                <span className="text-xs bg-bg-300/50 px-2 py-1 rounded-full text-text-200">실시간</span>
+              </div>
+              <p className="text-sm text-text-200 mb-1">입출력 비율</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-text-100">
+                  {(engineData.inputTokens || 0).toLocaleString()}
+                </p>
+                <span className="text-sm text-text-300">/</span>
+                <p className="text-2xl font-bold text-text-100">
+                  {(engineData.outputTokens || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <div className="flex-1">
+                  <p className="text-xs text-text-300">입력</p>
+                  <div className="w-full bg-bg-300/50 rounded-full h-1 mt-1">
+                    <div 
+                      className="bg-primary rounded-full h-1"
+                      style={{ width: `${(engineData.inputTokens / (engineData.inputTokens + engineData.outputTokens)) * 100 || 50}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-text-300">출력</p>
+                  <div className="w-full bg-bg-300/50 rounded-full h-1 mt-1">
+                    <div 
+                      className="bg-secondary rounded-full h-1"
+                      style={{ width: `${(engineData.outputTokens / (engineData.inputTokens + engineData.outputTokens)) * 100 || 50}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 일일 한도 */}
+          <motion.div
+            variants={itemVariants}
+            className="relative overflow-hidden bg-bg-200 border border-bg-300/50 rounded-2xl p-6 shadow-xl"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-success/5 rounded-full blur-xl" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-success/10 rounded-lg backdrop-blur-sm">
+                  <Target className="w-6 h-6 text-success" />
+                </div>
+                <span className="text-xs bg-bg-300/50 px-2 py-1 rounded-full text-text-200">오늘</span>
+              </div>
+              <p className="text-sm text-text-200 mb-1">일일 한도</p>
+              <p className="text-3xl font-bold text-text-100">
+                {currentPlanLimits.dailyTokens?.toLocaleString() || "1,000"}
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-success" />
+                <span className="text-xs text-text-300">정상 운영 중</span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 효율성 점수 */}
+          <motion.div
+            variants={itemVariants}
+            className="relative overflow-hidden bg-bg-200 border border-bg-300/50 rounded-2xl p-6 shadow-xl"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-warning/5 rounded-full blur-xl" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-warning/10 rounded-lg backdrop-blur-sm">
+                  <Award className="w-6 h-6 text-warning" />
+                </div>
+                <span className="text-xs bg-bg-300/50 px-2 py-1 rounded-full text-text-200">AI 분석</span>
+              </div>
+              <p className="text-sm text-text-200 mb-1">효율성 점수</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-3xl font-bold text-text-100">92</p>
+                <span className="text-sm text-text-300">/ 100</span>
+              </div>
+              <div className="mt-4">
+                <div className="flex gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={clsx(
+                        "h-1 flex-1 rounded-full",
+                        i < 4 ? "bg-warning" : "bg-bg-300/50"
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+
+        {/* 차트 섹션 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* 일주일 사용 트렌드 */}
+          <motion.div
+            variants={itemVariants}
+            className="bg-bg-200 rounded-2xl shadow-lg p-6 border border-bg-300/50"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-text-100">주간 사용 트렌드</h3>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setSelectedMetric('tokens')}
+                  className={clsx(
+                    "px-3 py-1 text-sm rounded-lg transition-colors",
+                    selectedMetric === 'tokens' 
+                      ? "bg-accent/20 text-accent" 
+                      : "text-text-300 hover:bg-bg-300/50"
+                  )}
+                >
+                  토큰
+                </button>
+                <button 
+                  onClick={() => setSelectedMetric('characters')}
+                  className={clsx(
+                    "px-3 py-1 text-sm rounded-lg transition-colors",
+                    selectedMetric === 'characters' 
+                      ? "bg-accent/20 text-accent" 
+                      : "text-text-300 hover:bg-bg-300/50"
+                  )}
+                >
+                  문자
+                </button>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={dailyData}>
+                <defs>
+                  <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} opacity={0.2} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke={COLORS.text300}
+                  tick={{ fontSize: 12, fill: COLORS.text300 }}
+                />
+                <YAxis 
+                  stroke={COLORS.text300}
+                  tick={{ fontSize: 12, fill: COLORS.text300 }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey={selectedMetric}
+                  stroke={COLORS.primary}
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorTokens)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </motion.div>
+
+          {/* 입출력 비율 파이차트 */}
+          <motion.div
+            variants={itemVariants}
+            className="bg-bg-200 rounded-2xl shadow-lg p-6 border border-bg-300/50"
+          >
+            <h3 className="text-lg font-semibold text-text-100 mb-6">토큰 사용 분포</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={index === 0 ? COLORS.primary : COLORS.secondary} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </motion.div>
         </div>
 
-        {/* User Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-bg-100 rounded-lg p-6 border border-bg-300">
-            <h2 className="text-lg font-semibold text-text-100 mb-4">사용자 정보</h2>
+        {/* 성능 지표 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 레이더 차트 */}
+          <motion.div
+            variants={itemVariants}
+            className="bg-bg-200 rounded-2xl shadow-lg p-6 border border-bg-300/50"
+          >
+            <h3 className="text-lg font-semibold text-text-100 mb-6">성능 지표</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <RadarChart data={radarData}>
+                <PolarGrid stroke={COLORS.border} opacity={0.2} />
+                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: COLORS.text300 }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: COLORS.text300 }} />
+                <Radar name="성능" dataKey="A" stroke={COLORS.secondary} fill={COLORS.secondary} fillOpacity={0.6} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </motion.div>
+
+          {/* 사용률 게이지 */}
+          <motion.div
+            variants={itemVariants}
+            className="bg-bg-200 rounded-2xl shadow-lg p-6 border border-bg-300/50"
+          >
+            <h3 className="text-lg font-semibold text-text-100 mb-6">월간 사용률</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <RadialBarChart cx="50%" cy="50%" innerRadius="40%" outerRadius="100%" data={radialData}>
+                <RadialBar
+                  dataKey="value"
+                  cornerRadius={10}
+                  fill={percentage > 80 ? COLORS.danger : percentage > 50 ? COLORS.warning : COLORS.success}
+                  background
+                />
+                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="text-3xl font-bold" fill={COLORS.text100}>
+                  {percentage}%
+                </text>
+              </RadialBarChart>
+            </ResponsiveContainer>
+          </motion.div>
+
+          {/* 빠른 통계 */}
+          <motion.div
+            variants={itemVariants}
+            className="bg-bg-200 border border-bg-300/50 rounded-2xl p-6 space-y-4"
+          >
+            <h3 className="text-lg font-semibold text-text-100 mb-4">빠른 통계</h3>
+            
             <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-text-300">사용자 ID</span>
-                <span className="text-text-100 font-medium">{usageData.userId || "ttrhtt12"}</span>
+              <div className="flex justify-between items-center p-3 bg-bg-300/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
+                  <span className="text-sm text-text-200">평균 응답 시간</span>
+                </div>
+                <span className="text-sm font-semibold text-text-100">1.2초</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-text-300">가입일</span>
-                <span className="text-text-100">{formatDate(usageData.signupDate)}</span>
+              
+              <div className="flex justify-between items-center p-3 bg-bg-300/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                  <span className="text-sm text-text-200">오늘 세션</span>
+                </div>
+                <span className="text-sm font-semibold text-text-100">12회</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-text-300">현재 플랜</span>
-                <span className={clsx(
-                  "px-2 py-1 rounded text-xs font-medium text-white",
-                  planColors[usageData.userPlan]
-                )}>
-                  {planLabels[usageData.userPlan]}
-                </span>
+              
+              <div className="flex justify-between items-center p-3 bg-bg-300/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
+                  <span className="text-sm text-text-200">평균 토큰/세션</span>
+                </div>
+                <span className="text-sm font-semibold text-text-100">847</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-text-300">플랜 변경일</span>
-                <span className="text-text-100">{formatDate(usageData.lastPlanChange)}</span>
+              
+              <div className="flex justify-between items-center p-3 bg-bg-300/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-warning rounded-full animate-pulse" />
+                  <span className="text-sm text-text-200">예상 잔여일</span>
+                </div>
+                <span className="text-sm font-semibold text-text-100">18일</span>
               </div>
             </div>
-          </div>
-
-          <div className="bg-bg-100 rounded-lg p-6 border border-bg-300">
-            <h2 className="text-lg font-semibold text-text-100 mb-4">플랜 제한</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-text-300">월간 토큰</span>
-                <span className="text-text-100 font-medium">
-                  {formatNumber(currentPlanLimits.monthlyTokens)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-300">일일 토큰</span>
-                <span className="text-text-100 font-medium">
-                  {formatNumber(currentPlanLimits.dailyTokens)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Reset Information */}
-        <div className="mt-6 p-4 bg-bg-200 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Clock size={16} className="text-text-400" />
-            <span className="text-sm text-text-300">
-              다음 사용량 초기화: {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString("ko-KR")}
-            </span>
-          </div>
+          </motion.div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

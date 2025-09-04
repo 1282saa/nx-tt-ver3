@@ -80,7 +80,8 @@ def lambda_handler(event, context):
 def handle_prompts(method: str, path_params: Dict, body: Dict) -> Dict:
     """프롬프트 (설명, 지침) CRUD 처리"""
     
-    engine_type = path_params.get('engineType')  # T5 또는 H8
+    # promptId와 engineType 둘 다 지원 (API Gateway 호환성)
+    engine_type = path_params.get('promptId') or path_params.get('engineType')  # T5 또는 H8
     
     if method == 'GET':
         # 특정 엔진의 프롬프트 조회
@@ -137,7 +138,8 @@ def handle_prompts(method: str, path_params: Dict, body: Dict) -> Dict:
 def handle_files(method: str, path_params: Dict, body: Dict) -> Dict:
     """파일 CRUD 처리"""
     
-    engine_type = path_params.get('engineType')  # T5 또는 H8
+    # promptId와 engineType 둘 다 지원 (API Gateway 호환성)
+    engine_type = path_params.get('promptId') or path_params.get('engineType')  # T5 또는 H8
     file_id = path_params.get('fileId')
     
     if method == 'GET':

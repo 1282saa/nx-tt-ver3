@@ -18,6 +18,9 @@ const Header = ({
   onToggleSidebar,
   isSidebarOpen = false,
   onDashboard,
+  selectedEngine,
+  usagePercentage,
+  isLandingPage = false,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const userDropdownRef = useRef(null);
@@ -100,16 +103,21 @@ const Header = ({
       onDashboard();
     } else if (action === "dashboard" && onAdminLogin) {
       onAdminLogin();
+    } else if (action === "subscription") {
+      // 구독 플랜 페이지로 이동
+      window.location.href = '/subscription';
+    } else if (action === "profile") {
+      // 프로필 페이지로 이동
+      window.location.href = '/profile';
     }
-    // 여기에 각 액션별 로직 추가
   };
 
   return (
     <header
-      className="sticky top-0 z-50 w-full transition-all duration-200"
+      className={`sticky top-0 z-50 w-full transition-all duration-200 ${isLandingPage ? 'border-b border-gray-800' : ''}`}
       style={{
         backdropFilter: "blur(12px)",
-        backgroundColor: "hsl(var(--bg-100)/0.95)",
+        backgroundColor: isLandingPage ? "rgba(15, 15, 15, 0.95)" : "hsl(var(--bg-100)/0.95)",
       }}
     >
       <div className="w-full px-4 sm:px-6 lg:px-8">
@@ -150,6 +158,48 @@ const Header = ({
           )}
 
           <div className="ml-auto flex items-center space-x-4">
+            {/* 사용량 표시 */}
+            {selectedEngine && usagePercentage !== undefined && usagePercentage !== null && (
+              <div className="flex items-center space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg" 
+                   style={{ backgroundColor: "hsl(var(--bg-200)/0.8)", backdropFilter: "blur(8px)" }}>
+                <span className="text-xs text-text-300 font-medium hidden sm:inline">
+                  {selectedEngine} 사용량
+                </span>
+                <span className="text-xs text-text-300 font-medium sm:hidden">
+                  {selectedEngine}
+                </span>
+                <div className="flex items-center space-x-2">
+                  <div 
+                    className="w-16 sm:w-24 h-1.5 sm:h-2 rounded-full overflow-hidden"
+                    style={{ backgroundColor: "hsl(var(--bg-300))" }}
+                  >
+                    <div
+                      className={clsx(
+                        "h-full transition-all duration-500 ease-out rounded-full",
+                        usagePercentage > 80
+                          ? "bg-red-500"
+                          : usagePercentage > 50
+                          ? "bg-yellow-500"
+                          : "bg-green-500"
+                      )}
+                      style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                    />
+                  </div>
+                  <span
+                    className={clsx(
+                      "text-sm font-bold min-w-[40px] text-right",
+                      usagePercentage > 80
+                        ? "text-red-500"
+                        : usagePercentage > 50
+                        ? "text-yellow-500"
+                        : "text-green-500"
+                    )}
+                  >
+                    {usagePercentage || 0}%
+                  </span>
+                </div>
+              </div>
+            )}
             {onDashboard && (
               <div className="hidden md:block">
                 <button

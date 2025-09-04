@@ -6,7 +6,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { Settings, Search, ArrowUp } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import clsx from "clsx";
 import FileUploadButton from "./FileUploadButton";
 import toast from "react-hot-toast";
@@ -389,30 +389,6 @@ const ChatInput = forwardRef(
                     onFileContent={handleFileContent}
                     disabled={!isConnected || isLoading}
                   />
-                </div>
-
-                <div className="relative shrink-0">
-                  <div className="flex items-center">
-                    <button
-                      className="claude-button group"
-                      type="button"
-                      aria-label="도구 메뉴 열기"
-                    >
-                      <Settings size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex shrink min-w-8 !shrink-0">
-                  <button
-                    className="claude-button group flex shrink min-w-8 !shrink-0"
-                    type="button"
-                  >
-                    <Search size={16} />
-                    <p className="min-w-0 pl-1 text-xs tracking-tight text-ellipsis whitespace-nowrap break-words overflow-hidden shrink">
-                      연구
-                    </p>
-                  </button>
                 </div>
               </div>
 

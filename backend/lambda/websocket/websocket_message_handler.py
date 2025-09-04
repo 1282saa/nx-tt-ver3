@@ -25,20 +25,20 @@ except ImportError:
     logger.warning("Could not import ConversationManager")
     ConversationManager = None
 
-# bedrock_client_enhanced import
+# bedrock_client_enhanced import (가드레일 포함)
 try:
     from shared.bedrock_client_enhanced import (
         create_enhanced_system_prompt,
         stream_claude_response_enhanced,
-        create_user_message_with_anchoring
+        create_user_message_with_constraints
     )
-    logger.info("Successfully imported bedrock_client_enhanced")
+    logger.info("Successfully imported bedrock_client_enhanced with guardrails")
 except ImportError:
     logger.warning("Could not import bedrock_client_enhanced, falling back to basic implementation")
     # Fallback functions if enhanced version is not available
     from shared.bedrock_client import create_system_prompt as create_enhanced_system_prompt
     from shared.bedrock_client import stream_claude_response as stream_claude_response_enhanced
-    create_user_message_with_anchoring = lambda msg, fmt=None, ex=None: msg
+    create_user_message_with_constraints = lambda msg, constraints=None: msg
 
 # Direct DynamoDB setup
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -156,10 +156,21 @@ def lambda_handler(event, context):
             conversation_history = merged_history
             logger.info(f"Final conversation history: {len(conversation_history)} messages")
             
+            # 사용자 역할 판단
+            user_role = 'user'  # 기본값
+            if user_id and '@sedaily.com' in str(user_id):
+                user_role = 'admin'
+            
+            # body에서 직접 userRole 확인 (프론트엔드가 명시적으로 전달하는 경우)
+            if body.get('userRole'):
+                user_role = body.get('userRole', 'user')
+            
+            logger.info(f"User role for chat: {user_role}")
+            
             # 채팅 메시지 처리 (대화 히스토리 포함)
             response = process_chat_message_with_bedrock(
                 user_message, engine_type, connection_id, apigateway_client, 
-                conversation_history, conversation_id, user_id
+                conversation_history, conversation_id, user_id, user_role
             )
             return response
         else:
@@ -192,7 +203,7 @@ def lambda_handler(event, context):
         }
 
 
-def process_chat_message_with_bedrock(user_message, engine_type, connection_id, apigateway_client, conversation_history=None, conversation_id=None, user_id=None):
+def process_chat_message_with_bedrock(user_message, engine_type, connection_id, apigateway_client, conversation_history=None, conversation_id=None, user_id=None, user_role=None):
     """실제 Bedrock Claude를 사용한 채팅 메시지 처리 (대화 히스토리 포함)"""
     
     try:
@@ -224,9 +235,18 @@ def process_chat_message_with_bedrock(user_message, engine_type, connection_id, 
         #     'timestamp': datetime.utcnow().isoformat() + 'Z'
         # }, apigateway_client)
         
-        # 2. 프롬프트와 파일 데이터 로드
+        # 2. 프롬프트와 파일 데이터 로드 (사용자 역할 정보 포함)
         logger.info(f"Loading prompt data for {engine_type}")
         prompt_data = load_prompt_data(engine_type)
+        
+        # user_role이 전달되지 않은 경우 기본값 설정
+        if not user_role:
+            user_role = 'user'
+            if user_id and '@sedaily.com' in str(user_id):
+                user_role = 'admin'
+            
+        prompt_data['userRole'] = user_role
+        logger.info(f"User role determined: {user_role} for user_id: {user_id}")
         
         if not prompt_data.get('prompt'):
             raise ValueError(f"{engine_type} 엔진의 프롬프트 데이터를 찾을 수 없습니다")
@@ -254,11 +274,12 @@ def process_chat_message_with_bedrock(user_message, engine_type, connection_id, 
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         }, apigateway_client)
         
-        # 6. 실시간 스트리밍 응답 전송
+        # 6. 실시간 스트리밍 응답 전송 (가드레일 적용)
         chunk_index = 0
         total_response = ""
         
-        for chunk_text in stream_claude_response_inline(user_message, system_prompt, conversation_history):
+        # stream_claude_response_enhanced 사용 (가드레일 지원, 실시간 스트리밍)
+        for chunk_text in stream_claude_response_enhanced(user_message, system_prompt, use_cot=False, max_retries=2, validate_constraints=False, prompt_data=prompt_data):
             if chunk_text:
                 total_response += chunk_text
                 
@@ -388,8 +409,8 @@ def create_system_prompt_inline(prompt_data, engine_type):
     return create_enhanced_system_prompt(prompt_data, engine_type, use_enhanced=True)
 
 
-def stream_claude_response_inline(user_message, system_prompt, conversation_history=None):
-    """Claude Native 대화 형식으로 스트리밍 응답 생성"""
+def stream_claude_response_inline(user_message, system_prompt, conversation_history=None, prompt_data=None):
+    """Claude Native 대화 형식으로 스트리밍 응답 생성 (가드레일 지원)"""
     try:
         # Claude API가 이해하는 형식으로 대화 히스토리 구성
         messages = []
@@ -471,10 +492,26 @@ def stream_claude_response_inline(user_message, system_prompt, conversation_hist
             logger.info(f"Message {i+1}: role={msg['role']}, content_preview={msg['content'][:200] if msg['content'] else 'empty'}...")
         logger.info("=== END OF MESSAGES ===")
         
-        response = bedrock_runtime.invoke_model_with_response_stream(
-            modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
-            body=json.dumps(body)
-        )
+        # 가드레일 설정 추가 (사용자 역할에 따라)
+        invoke_params = {
+            "modelId": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+            "body": json.dumps(body)
+        }
+        
+        # prompt_data에서 사용자 역할 확인
+        user_role = 'user'  # 기본값
+        if prompt_data and 'userRole' in prompt_data:
+            user_role = prompt_data.get('userRole', 'user')
+        
+        # 일반 사용자에게만 가드레일 적용
+        if user_role != 'admin':
+            invoke_params["guardrailIdentifier"] = "ycwjnmzxut7k"
+            invoke_params["guardrailVersion"] = "1"
+            logger.info(f"Applying guardrail for user role: {user_role}")
+        else:
+            logger.info(f"No guardrail applied for admin user")
+        
+        response = bedrock_runtime.invoke_model_with_response_stream(**invoke_params)
         
         stream = response.get('body')
         if stream:

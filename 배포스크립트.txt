@@ -1,6 +1,0 @@
-
-# bedrock
-deploy-websocket-lambda-fixed.sh
-
-
-

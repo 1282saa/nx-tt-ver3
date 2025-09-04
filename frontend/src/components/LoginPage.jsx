@@ -63,13 +63,25 @@ const LoginPage = ({ onLogin, onGoToSignUp, selectedEngine: propEngine }) => {
         
         // 사용자 역할 결정 - 특정 계정은 관리자로 설정
         let userRole = 'user';
+        let userPlan = 'free';  // 기본값
+        
         if (formData.username === 'ai@sedaily.com' || result.user.email === 'ai@sedaily.com') {
           userRole = 'admin';
+          userPlan = 'premium';  // admin은 자동으로 premium
         } else if (result.user.email?.includes('@sedaily.com')) {
           // 다른 sedaily.com 도메인 사용자도 관리자로 설정 (옵션)
           userRole = 'admin';
+          userPlan = 'premium';  // sedaily 도메인은 모두 premium
         }
+        
         localStorage.setItem('userRole', userRole);
+        localStorage.setItem('userPlan', userPlan);
+        
+        // 사용량 캐시 정리 (새로 로그인 시 최신 데이터 가져오도록)
+        localStorage.removeItem('usage_percentage_T5');
+        localStorage.removeItem('usage_percentage_time_T5');
+        localStorage.removeItem('usage_percentage_H8');
+        localStorage.removeItem('usage_percentage_time_H8');
         
         // Remember Me 처리
         if (rememberMe) {

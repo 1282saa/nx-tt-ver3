@@ -1,4 +1,4 @@
-const API_ENDPOINT = import.meta.env.VITE_PROMPT_API_URL || 'https://qyfams2iva.execute-api.us-east-1.amazonaws.com/prod';
+const API_ENDPOINT = import.meta.env.VITE_PROMPT_API_URL || 'https://o96dgrd6ji.execute-api.us-east-1.amazonaws.com';
 
 // 프롬프트 조회 (설명, 지침, 파일 목록)
 export const getPrompt = async (engineType) => {

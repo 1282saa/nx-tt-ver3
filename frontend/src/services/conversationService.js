@@ -13,9 +13,9 @@ class ConversationService {
   // 사용자 ID 가져오기 (인증된 사용자 정보 사용)
   getUserId() {
     const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-    // userId를 우선 사용하되, 없으면 email 또는 username 사용
+    // UUID(username)를 우선 사용하되, 없으면 userId 또는 email 사용
     return (
-      userInfo.userId || userInfo.email || userInfo.username || "anonymous"
+      userInfo.username || userInfo.userId || userInfo.email || "anonymous"
     );
   }
 
@@ -132,6 +132,67 @@ class ConversationService {
       console.error("대화 조회 실패:", error);
       // 오류 발생 시 localStorage에서 조회
       return this.getConversationFromLocalStorage(conversationId);
+    }
+  }
+
+  // 대화 제목 수정
+  async updateConversationTitle(conversationId, newTitle) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversationId}`,
+        {
+          method: "PATCH",
+          headers: {
+            ...this.getAuthHeaders(),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: this.userId,
+            title: newTitle,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to update title: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("✏️ 제목 수정 성공:", data);
+      
+      // localStorage도 업데이트
+      this.updateLocalStorageTitle(conversationId, newTitle);
+      
+      return data;
+    } catch (error) {
+      console.error("제목 수정 실패:", error);
+      // 오류 발생 시 localStorage만 업데이트
+      this.updateLocalStorageTitle(conversationId, newTitle);
+      throw error;
+    }
+  }
+
+  // localStorage 제목 업데이트
+  updateLocalStorageTitle(conversationId, newTitle) {
+    try {
+      // conversations는 object 형태로 저장되어 있음
+      const conversations = JSON.parse(localStorage.getItem("conversations") || "{}");
+      
+      // conversationId로 해당 대화를 찾음
+      const key = Object.keys(conversations).find(
+        k => conversations[k].conversationId === conversationId
+      );
+      
+      if (key && conversations[key]) {
+        conversations[key].title = newTitle;
+        conversations[key].updatedAt = new Date().toISOString();
+        localStorage.setItem("conversations", JSON.stringify(conversations));
+        console.log("✏️ localStorage 제목 업데이트 성공");
+      } else {
+        console.warn("localStorage에서 해당 대화를 찾을 수 없음:", conversationId);
+      }
+    } catch (error) {
+      console.error("localStorage 제목 업데이트 실패:", error);
     }
   }
 
@@ -353,6 +414,8 @@ export const listConversations = (engineType) =>
 export const getConversation = (id) => conversationService.getConversation(id);
 export const deleteConversation = (id) =>
   conversationService.deleteConversation(id);
+export const updateConversationTitle = (id, title) =>
+  conversationService.updateConversationTitle(id, title);
 export const autoSaveConversation = (data) =>
   conversationService.autoSave(data);
 export const syncConversations = () => conversationService.syncConversations();

@@ -9,9 +9,22 @@ const USAGE_API_BASE_URL =
 const getCurrentUser = () => {
   try {
     const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    // userPlan이 있으면 우선 사용, 없으면 userRole 기반 판단
+    let userPlan = localStorage.getItem("userPlan");
+    if (!userPlan) {
+      // userRole이 admin이면 premium, 그 외는 free
+      userPlan = localStorage.getItem("userRole") === "admin" ? "premium" : "free";
+    }
+    
+    console.log("🔍 사용자 정보:", {
+      userId: userInfo.username || userInfo.email,
+      userRole: localStorage.getItem("userRole"),
+      userPlan: userPlan
+    });
+    
     return {
-      userId: userInfo.email || userInfo.username || "anonymous",
-      plan: localStorage.getItem("userRole") === "admin" ? "premium" : "free",
+      userId: userInfo.username || userInfo.email || "anonymous",  // UUID 우선 사용
+      plan: userPlan,
     };
   } catch (error) {
     console.error("사용자 정보 파싱 실패:", error);
@@ -450,10 +463,15 @@ const updateLocalUsageBackup = (engineType, inputText, outputText) => {
       totalTokens: engine.tokens.total,
     });
 
+    // 비동기로 퍼센티지 계산
+    const percentage = Math.round(
+      (engine.tokens.total / engine.limits.monthlyTokens) * 100
+    );
+    
     return {
       success: true,
       usage: engine,
-      percentage: getUsagePercentage(engineType),
+      percentage: Math.min(percentage, 100),
       remaining: limitCheck.remaining,
       isBackup: true,
     };
@@ -463,21 +481,89 @@ const updateLocalUsageBackup = (engineType, inputText, outputText) => {
   }
 };
 
-// 사용량 퍼센티지 계산
-export const getUsagePercentage = (engineType) => {
-  const usageData = getLocalUsageData();
-  const engine = usageData[engineType];
-
-  if (!engine || !engine.limits) return 0;
-
-  const percentage = Math.round(
-    (engine.tokens.total / engine.limits.monthlyTokens) * 100
-  );
-  return Math.min(percentage, 100); // 100% 초과 방지
+// 사용량 퍼센티지 계산 (async로 변경 - 서버 데이터 우선)
+export const getUsagePercentage = async (engineType, forceRefresh = false) => {
+  try {
+    // 캐시 체크 (5초간만 유효 - 매우 짧게)
+    const cacheKey = `usage_percentage_${engineType}`;
+    const cacheTime = `usage_percentage_time_${engineType}`;
+    const cachedValue = localStorage.getItem(cacheKey);
+    const cachedTime = localStorage.getItem(cacheTime);
+    
+    if (!forceRefresh && cachedValue && cachedTime) {
+      const timeDiff = Date.now() - parseInt(cachedTime);
+      if (timeDiff < 5000) { // 5초 이내면 캐시 사용
+        console.log(`📦 캐시된 사용량 반환: ${cachedValue}%`);
+        return parseInt(cachedValue);
+      }
+    }
+    
+    // 서버에서 최신 데이터 가져오기
+    const user = getCurrentUser();
+    const response = await fetch(
+      `${USAGE_API_BASE_URL}/usage/${user.userId}/${engineType}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        const totalTokens = result.data.totalTokens || 0;
+        const limits = PLAN_LIMITS[user.plan]?.[engineType] || PLAN_LIMITS.free[engineType];
+        
+        console.log(`🔍 사용량 계산:`, {
+          userId: user.userId,
+          userPlan: user.plan,
+          userRole: localStorage.getItem("userRole"),
+          engineType,
+          totalTokens,
+          monthlyLimit: limits.monthlyTokens,
+          calculation: `${totalTokens} / ${limits.monthlyTokens} * 100`
+        });
+        
+        const percentage = Math.round(
+          (totalTokens / limits.monthlyTokens) * 100
+        );
+        const finalPercentage = Math.min(percentage, 100);
+        
+        // 캐시 저장
+        localStorage.setItem(cacheKey, finalPercentage.toString());
+        localStorage.setItem(cacheTime, Date.now().toString());
+        
+        return finalPercentage;
+      }
+    }
+    
+    // 서버 요청 실패시 로컬 데이터 사용
+    const usageData = getLocalUsageData();
+    const engine = usageData[engineType];
+    
+    if (!engine || !engine.limits) return 0;
+    
+    const percentage = Math.round(
+      (engine.tokens.total / engine.limits.monthlyTokens) * 100
+    );
+    return Math.min(percentage, 100);
+  } catch (error) {
+    console.error('사용량 퍼센티지 조회 실패:', error);
+    
+    // 오류 시 로컬 데이터 사용
+    const usageData = getLocalUsageData();
+    const engine = usageData[engineType];
+    
+    if (!engine || !engine.limits) return 0;
+    
+    const percentage = Math.round(
+      (engine.tokens.total / engine.limits.monthlyTokens) * 100
+    );
+    return Math.min(percentage, 100);
+  }
 };
 
-// 사용량 요약 정보 가져오기
-export const getUsageSummary = (engineType) => {
+// 사용량 요약 정보 가져오기 (async로 변경)
+export const getUsageSummary = async (engineType) => {
   const usageData = getLocalUsageData();
   const engine = usageData[engineType];
   const today = new Date().toISOString().slice(0, 10);
@@ -485,10 +571,11 @@ export const getUsageSummary = (engineType) => {
   if (!engine) return null;
 
   const todayUsage = engine.dailyUsage[today] || { tokens: 0, messages: 0 };
+  const percentage = await getUsagePercentage(engineType);
 
   return {
     // 퍼센티지
-    percentage: getUsagePercentage(engineType),
+    percentage,
 
     // 토큰 정보
     tokens: {
@@ -630,6 +717,21 @@ export const updateUsageOnServer = async (userId, engineType, usageData) => {
     console.error("서버 사용량 업데이트 실패:", error);
     return null;
   }
+};
+
+// 로컬 스토리지 사용량 캐시 정리
+export const clearUsageCache = () => {
+  // 대시보드에서 사용하는 캐시 정리
+  localStorage.removeItem('user_usage_data');
+  localStorage.removeItem('usage_data_timestamp');
+  
+  // 퍼센티지 캐시도 정리
+  localStorage.removeItem('usage_percentage_T5');
+  localStorage.removeItem('usage_percentage_time_T5');
+  localStorage.removeItem('usage_percentage_H8');
+  localStorage.removeItem('usage_percentage_time_H8');
+  
+  console.log('🗑️ 사용량 캐시 정리 완료');
 };
 
 // 플랜 변경
@@ -788,5 +890,6 @@ export default {
   resetMonthlyUsage,
   getAllUsageData,
   getPlanLimits,
+  clearUsageCache,
   PLAN_LIMITS,
 };

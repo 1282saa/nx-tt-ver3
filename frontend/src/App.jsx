@@ -1,16 +1,27 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { motion } from 'framer-motion';
-import MainContent from "./components/MainContent";
-import ChatPage from "./components/ChatPage";
-import LoginPage from "./components/LoginPage";
-import SignUpPage from "./components/SignUpPage";
-import LandingPage from "./components/LandingPage";
-import Sidebar from "./components/Sidebar";
-import Dashboard from "./components/Dashboard";
+import { AnimatePresence } from 'framer-motion';
 import ProtectedRoute from "./components/ProtectedRoute";
 import { PageTransition } from "./components/PageTransition";
-import { AnimatePresence } from 'framer-motion';
+
+// Lazy load components for better performance
+const MainContent = lazy(() => import("./components/MainContent"));
+const ChatPage = lazy(() => import("./components/ChatPage"));
+const LoginPage = lazy(() => import("./components/LoginPage"));
+const SignUpPage = lazy(() => import("./components/SignUpPage"));
+const LandingPage = lazy(() => import("./components/LandingPage"));
+const Sidebar = lazy(() => import("./components/Sidebar"));
+const Dashboard = lazy(() => import("./components/Dashboard"));
+const SubscriptionPage = lazy(() => import("./components/SubscriptionPage"));
+const ProfilePage = lazy(() => import("./components/ProfilePage"));
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center h-screen bg-bg-100">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
+  </div>
+);
 
 function AppContent() {
   const navigate = useNavigate();
@@ -197,8 +208,8 @@ function AppContent() {
     navigate(`/${enginePath}/chat`);
   };
 
-  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입 제외)
-  const showSidebar = !['/', '/login', '/signup'].includes(location.pathname);
+  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입, 대시보드, 구독, 프로필 제외)
+  const showSidebar = !['/', '/login', '/signup', '/subscription', '/profile'].includes(location.pathname) && !location.pathname.includes('/dashboard');
 
   return (
     <div
@@ -231,19 +242,20 @@ function AppContent() {
         }}
       >
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname.split('/').slice(0, 3).join('/')}>
-            <Route 
-              path="/" 
-              element={
-                <PageTransition pageKey="landing">
-                  <LandingPage
-                    onSelectEngine={handleSelectEngine}
-                    onLogin={handleLogin}
-                    onLogout={handleLogout}
-                  />
-                </PageTransition>
-              } 
-            />
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes location={location} key={location.pathname.split('/').slice(0, 3).join('/')}>
+              <Route 
+                path="/" 
+                element={
+                  <PageTransition pageKey="landing">
+                    <LandingPage
+                      onSelectEngine={handleSelectEngine}
+                      onLogin={handleLogin}
+                      onLogout={handleLogout}
+                    />
+                  </PageTransition>
+                } 
+              />
           <Route 
             path="/login" 
             element={
@@ -373,9 +385,30 @@ function AppContent() {
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/subscription" 
+              element={
+                <ProtectedRoute>
+                  <PageTransition pageKey="subscription">
+                    <SubscriptionPage />
+                  </PageTransition>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <PageTransition pageKey="profile">
+                    <ProfilePage />
+                  </PageTransition>
+                </ProtectedRoute>
+              } 
+            />
             {/* 기본 리다이렉트 */}
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </AnimatePresence>
       </motion.div>
     </div>

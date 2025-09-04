@@ -7,9 +7,11 @@ import {
   ChevronLeft,
   MoreHorizontal,
   User,
-  X
+  X,
+  Edit2,
+  Check
 } from 'lucide-react';
-import { listConversations, deleteConversation } from '../services/conversationService';
+import { listConversations, deleteConversation, updateConversationTitle } from '../services/conversationService';
 
 const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, ref) => {
   const location = useLocation();
@@ -345,6 +347,73 @@ const ConversationItem = ({
   onDelete
 }) => {
   const [showOptions, setShowOptions] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(conversation.title || '');
+
+  // 외부 클릭 감지
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // 드롭다운이 열려있고, 클릭한 요소가 드롭다운 내부가 아닌 경우
+      if (showOptions && !event.target.closest('.options-dropdown') && 
+          !event.target.closest('.options-button')) {
+        setShowOptions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOptions]);
+
+  const handleRename = async () => {
+    if (!editTitle.trim()) return;
+    
+    try {
+      await updateConversationTitle(conversation.conversationId, editTitle);
+      await loadConversations(); // 목록 새로고침
+      setIsEditing(false);
+    } catch (error) {
+      console.error('제목 수정 실패:', error);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <li className="relative px-3 py-1">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                handleRename();
+              }
+            }}
+            className="flex-1 px-2 py-1 text-sm bg-bg-300 border border-bg-400 
+              rounded text-text-100 focus:outline-none focus:border-accent-main-100"
+            autoFocus
+          />
+          <button
+            onClick={handleRename}
+            className="p-1 hover:bg-bg-400 rounded"
+          >
+            <Check size={14} className="text-green-500" />
+          </button>
+          <button
+            onClick={() => {
+              setIsEditing(false);
+              setEditTitle(conversation.title || '');
+            }}
+            className="p-1 hover:bg-bg-400 rounded"
+          >
+            <X size={14} className="text-red-500" />
+          </button>
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li className="relative group">
@@ -373,7 +442,7 @@ const ConversationItem = ({
             e.stopPropagation();
             setShowOptions(!showOptions);
           }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity
+          className="options-button opacity-0 group-hover:opacity-100 transition-opacity
             h-6 w-6 rounded flex items-center justify-center hover:bg-bg-300"
         >
           <MoreHorizontal size={14} />
@@ -382,8 +451,19 @@ const ConversationItem = ({
 
       {/* Options dropdown */}
       {showOptions && (
-        <div className="absolute right-0 top-8 bg-bg-100 
-          rounded-lg shadow-lg z-20 py-1 min-w-[150px]">
+        <div className="options-dropdown absolute right-0 top-8 bg-bg-100 
+          rounded-lg shadow-lg z-20 py-1 min-w-[150px] border border-bg-300">
+          <button
+            onClick={() => {
+              setIsEditing(true);
+              setShowOptions(false);
+            }}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-bg-200 transition-colors
+              flex items-center gap-2"
+          >
+            <Edit2 size={12} />
+            제목 수정
+          </button>
           <button
             onClick={() => {
               onToggleFavorite();

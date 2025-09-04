@@ -2,13 +2,10 @@ import React, {
   useState,
   useRef,
   useEffect,
-  useCallback,
-  useMemo,
 } from "react";
-import { ArrowUp, Plus, Settings, Search } from "lucide-react";
+import { ArrowUp, Plus, Settings } from "lucide-react";
 import Header from "./Header";
 import clsx from "clsx";
-import { generateTitles, generateTitlesMock } from "../services/api";
 import {
   connectWebSocket,
   sendChatMessage,
@@ -20,7 +17,8 @@ import {
   autoSaveConversation,
   getConversation,
 } from "../services/conversationService";
-import { getUsagePercentage, updateLocalUsage, fetchUsageFromServer } from "../services/usageService";
+import { updateLocalUsage, fetchUsageFromServer } from "../services/usageService";
+import * as usageService from "../services/usageService";
 import { useParams, useLocation } from "react-router-dom";
 import LoadingSpinner from "./LoadingSpinner";
 import StreamingAssistantMessage from "./StreamingAssistantMessage";
@@ -152,6 +150,36 @@ const ChatPage = ({
       }
     }
   }, [messages, currentConversationId]);
+  
+  // 컴포넌트 마운트 시 사용량 초기화
+  useEffect(() => {
+    const initializeUsage = async () => {
+      try {
+        console.log("📊 초기 사용량 데이터 로딩...");
+        
+        // 먼저 로컬 스토리지에서 캐시된 값 확인
+        const cachedValue = localStorage.getItem(`usage_percentage_${selectedEngine}`);
+        if (cachedValue !== null) {
+          setUsagePercentage(parseInt(cachedValue));
+          console.log(`📦 캐시된 사용량: ${cachedValue}%`);
+        }
+        
+        // 비동기로 서버에서 최신 데이터 가져오기
+        const percentage = await usageService.getUsagePercentage(selectedEngine, false); // 캐시 사용 허용
+        setUsagePercentage(percentage);
+        console.log(`✅ ${selectedEngine} 초기 사용량: ${percentage}%`);
+        
+        // 헤더 업데이트를 위한 이벤트 발생
+        window.dispatchEvent(new CustomEvent("usageUpdated"));
+      } catch (error) {
+        console.error("초기 사용량 로딩 실패:", error);
+        // 실패 시 기본값
+        setUsagePercentage(0);
+      }
+    };
+    
+    initializeUsage();
+  }, [selectedEngine]);
   
   // 기존 대화 불러오기 - URL 변경 또는 새로고침 시
   useEffect(() => {
@@ -288,10 +316,7 @@ const ChatPage = ({
   const currentAssistantMessageId = useRef(null);
   const hasProcessedInitial = useRef(false);
   const expectedChunkIndex = useRef(0); // 청크 순서 추적
-  const [usagePercentage, setUsagePercentage] = useState(() => {
-    // 초기값을 즉시 계산해서 설정 (0%에서 시작하지 않음)
-    return getUsagePercentage(selectedEngine);
-  }); // 사용량 퍼센티지
+  const [usagePercentage, setUsagePercentage] = useState(null); // 사용량 퍼센티지 - null로 시작하여 로딩 상태 표시
   const streamingTimeoutRef = useRef(null); // 스트리밍 타임아웃 추적
   const chunkBuffer = useRef(new Map()); // 청크 버퍼 (index -> chunk 내용)
   const processBufferTimeoutRef = useRef(null); // 버퍼 처리 타임아웃
@@ -353,7 +378,7 @@ const ChatPage = ({
       try {
         const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
         // conversationService.js와 동일한 순서로 userId 가져오기
-        const userId = userInfo.userId || userInfo.email || userInfo.username || 'anonymous';
+        const userId = userInfo.username || userInfo.userId || userInfo.email || 'anonymous';  // UUID 우선
         
         // 서버에서 사용량 가져오기 시도
         await fetchUsageFromServer(userId, selectedEngine);
@@ -362,8 +387,9 @@ const ChatPage = ({
       }
       
       // 로컬 또는 서버에서 가져온 사용량으로 업데이트
-      const percentage = getUsagePercentage(selectedEngine);
-      setUsagePercentage(percentage);
+      usageService.getUsagePercentage(selectedEngine, true).then(percentage => {
+        setUsagePercentage(percentage);
+      });
     };
     
     loadUsage();
@@ -631,7 +657,7 @@ const ChatPage = ({
                 
                 const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
                 // conversationService.js와 동일한 순서로 userId 가져오기
-                const userId = userInfo.userId || userInfo.email || userInfo.username || 'anonymous';
+                const userId = userInfo.username || userInfo.userId || userInfo.email || 'anonymous';  // UUID 우선
                 
                 const conversationData = {
                   conversationId: currentConversationId,
@@ -1167,6 +1193,8 @@ const ChatPage = ({
         onToggleSidebar={onToggleSidebar}
         isSidebarOpen={isSidebarOpen}
         onDashboard={onDashboard}
+        selectedEngine={selectedEngine}
+        usagePercentage={usagePercentage}
       />
 
       {/* Main Chat Container */}
@@ -1228,39 +1256,6 @@ const ChatPage = ({
           "mx-auto w-full py-4",
           userRole === "admin" ? "max-w-3xl" : "max-w-4xl"
         )}>
-          {/* 사용량 표시 */}
-          <div className="flex justify-end px-4 mb-2">
-            <div className="flex items-center gap-2 text-sm text-text-500">
-              <span>{selectedEngine} 사용량:</span>
-              <div className="flex items-center gap-1">
-                <div className="relative w-24 h-2 bg-bg-200 rounded-full overflow-hidden">
-                  <div
-                    className={clsx(
-                      "absolute left-0 top-0 h-full transition-all duration-300",
-                      usagePercentage > 80
-                        ? "bg-red-500"
-                        : usagePercentage > 50
-                        ? "bg-yellow-500"
-                        : "bg-green-500"
-                    )}
-                    style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                  />
-                </div>
-                <span
-                  className={clsx(
-                    "font-medium",
-                    usagePercentage > 80
-                      ? "text-red-500"
-                      : usagePercentage > 50
-                      ? "text-yellow-500"
-                      : "text-green-500"
-                  )}
-                >
-                  {usagePercentage}%
-                </span>
-              </div>
-            </div>
-          </div>
 
           <fieldset className="flex w-full min-w-0 flex-col px-4">
             <div
@@ -1340,15 +1335,6 @@ const ChatPage = ({
                           <Settings size={16} />
                         </button>
                       </div>
-                    </div>
-
-                    <div className="flex shrink min-w-8 !shrink-0">
-                      <button className="claude-button group flex shrink min-w-8 !shrink-0">
-                        <Search size={16} />
-                        <p className="min-w-0 pl-1 text-xs tracking-tight text-ellipsis whitespace-nowrap break-words overflow-hidden shrink">
-                          연구
-                        </p>
-                      </button>
                     </div>
                   </div>
 
