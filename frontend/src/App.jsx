@@ -2,26 +2,23 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { motion } from 'framer-motion';
 import { AnimatePresence } from 'framer-motion';
-import ProtectedRoute from "./components/ProtectedRoute";
-import { PageTransition } from "./components/PageTransition";
+import ProtectedRoute from "./features/auth/components/ProtectedRoute";
+import { PageTransition } from "./shared/components/ui/PageTransition";
 
 // Lazy load components for better performance
-const MainContent = lazy(() => import("./components/MainContent"));
-const ChatPage = lazy(() => import("./components/ChatPage"));
-const LoginPage = lazy(() => import("./components/LoginPage"));
-const SignUpPage = lazy(() => import("./components/SignUpPage"));
-const LandingPage = lazy(() => import("./components/LandingPage"));
-const Sidebar = lazy(() => import("./components/Sidebar"));
-const Dashboard = lazy(() => import("./components/Dashboard"));
-const SubscriptionPage = lazy(() => import("./components/SubscriptionPage"));
-const ProfilePage = lazy(() => import("./components/ProfilePage"));
+// Features 폴더의 컴포넌트 사용
+const MainContent = lazy(() => import("./features/dashboard/components/MainContent"));
+const ChatPage = lazy(() => import("./features/chat/containers/ChatPageContainer"));
+const LoginPage = lazy(() => import("./features/auth/containers/LoginContainer").then(module => ({ default: module.default })));
+const SignUpPage = lazy(() => import("./features/auth/components/SignUpPage"));
+const LandingPage = lazy(() => import("./features/landing/containers/LandingContainer").then(module => ({ default: module.default })));
+const Sidebar = lazy(() => import("./shared/components/layout/Sidebar"));
+const Dashboard = lazy(() => import("./features/dashboard/containers/DashboardContainer").then(module => ({ default: module.default })));
+const SubscriptionPage = lazy(() => import("./features/subscription/components/SubscriptionPage"));
+const ProfilePage = lazy(() => import("./features/profile/components/ProfilePage"));
 
-// Loading component
-const LoadingSpinner = () => (
-  <div className="flex items-center justify-center h-screen bg-bg-100">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
-  </div>
-);
+// Loading component - 제거됨
+const LoadingSpinner = () => null;
 
 function AppContent() {
   const navigate = useNavigate();
@@ -103,7 +100,7 @@ function AppContent() {
     console.log('🚪 App.jsx handleLogout 호출됨');
     try {
       // Cognito 로그아웃
-      const authService = (await import('./services/authService')).default;
+      const authService = (await import('./features/auth/services/authService')).default;
       await authService.signOut();
       console.log('✅ Cognito 로그아웃 완료');
     } catch (error) {
@@ -144,6 +141,7 @@ function AppContent() {
   };
 
   const handleSelectEngine = (engine) => {
+    console.log('🚀 handleSelectEngine called with:', engine);
     setSelectedEngine(engine);
     setCurrentProject((prev) => ({
       ...prev,
